@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"pubengine/views"
+	"github.com/eringen/pubengine/views"
 )
 
 var errNotFound = sql.ErrNoRows

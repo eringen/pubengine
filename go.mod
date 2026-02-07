@@ -1,4 +1,4 @@
-module pubengine
+module github.com/eringen/pubengine
 
 go 1.24.0
 

@@ -23,7 +23,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	_ "modernc.org/sqlite"
 
-	"pubengine/views"
+	"github.com/eringen/pubengine/views"
 )
 
 // app holds shared dependencies injected into every handler.

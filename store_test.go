@@ -7,7 +7,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"pubengine/views"
+	"github.com/eringen/pubengine/views"
 )
 
 func setupTestStore(t *testing.T) (*store, func()) {

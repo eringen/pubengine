@@ -1,10 +1,13 @@
 # pubengine
 
-A minimal blog publishing engine built with Go, Echo, templ, HTMX, Tailwind CSS, and SQLite. No frameworks, no JavaScript build pipelines beyond esbuild — just a fast, self-contained blog with an admin dashboard.
+A minimal blog engine built with Go, HTMX, and SQLite. One binary, no JS frameworks, just write and publish.
 
 ## Quick start
 
 ```bash
+git clone https://github.com/eringen/pubengine.git
+cd pubengine
+
 # Install Go deps + templ CLI
 go mod download
 go install github.com/a-h/templ/cmd/templ@latest

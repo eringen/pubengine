@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"pubengine/views"
+	"github.com/eringen/pubengine/views"
 )
 
 type store struct {
