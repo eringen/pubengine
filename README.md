@@ -76,11 +76,80 @@ To customize the theme, edit `assets/tailwind.css` and `tailwind.config.js`. The
 
 ## Markdown
 
-The blog uses a custom markdown renderer (`views/markdown.go`). Standard features plus:
+The blog uses a custom markdown renderer (`views/markdown.go`). No external dependencies — just regex-based parsing that covers the common cases.
 
-- `[text](url)^` — appending `^` opens links in a new tab
-- `![alt](url){style}` — curly braces for inline image styles
-- Tables with `|---|---|` separator rows
+### Text formatting
+
+| Syntax | Result |
+|---|---|
+| `**bold**` or `__bold__` | **bold** |
+| `*italic*` or `_italic_` | *italic* |
+| `**bold *nested italic* text**` | nested formatting works |
+
+### Headings
+
+```
+# Heading 1
+## Heading 2
+### Heading 3
+```
+
+### Links
+
+```
+[text](https://example.com)       — opens in same tab
+[text](https://example.com)^      — opens in new tab (append ^)
+```
+
+The `^` suffix adds `target="_blank" rel="noopener noreferrer"`. Only `http`, `https`, `mailto`, and `tel` schemes are allowed.
+
+### Images
+
+```
+![alt text](url){style}
+![alt text](url){style|width|height}
+```
+
+Curly braces set inline CSS style and optional dimensions. The first image on a page gets `fetchpriority="high"`, the rest get `loading="eager"`.
+
+### Lists
+
+```
+- item one
+- item two
+- item three
+```
+
+### Blockquotes
+
+```
+> quoted text
+> more quoted text
+```
+
+### Code blocks
+
+````
+```
+code goes here
+```
+````
+
+### Tables
+
+```
+| Header 1 | Header 2 |
+|----------|----------|
+| cell 1   | cell 2   |
+```
+
+The `|---|---|` row separates the header from the body.
+
+### Horizontal rules
+
+```
+---
+```
 
 ## Data
 
