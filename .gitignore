@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+tmp/
+public/tailwind.css
+public/app.js
+views/*_templ.go
+pubengine
+build-errors.log
+
+# Database
+data/*.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

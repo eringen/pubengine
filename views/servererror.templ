@@ -1,0 +1,32 @@
+package views
+
+templ ServerError(cfg SiteConfig) {
+	<!DOCTYPE html>
+	<html lang="en">
+		@HeadWithMeta(cfg, PageMeta{
+			Title:       "Server Error — " + cfg.Name,
+			Description: "Something went wrong on our end.",
+			OGType:      "website",
+		})
+		<body class="bg-white dark:bg-neutral-900 text-ink dark:text-white antialiased">
+			@Nav(cfg)
+			<div class="pt-20"></div>
+			<main class="flex min-h-[60vh] items-center justify-center px-4 py-16">
+				<div class="mx-auto flex max-w-md flex-col items-center gap-4 text-center">
+					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-600 dark:text-neutral-400">Error 500</p>
+					<h1 class="text-5xl font-bold tracking-tight md:text-7xl">Server Error</h1>
+					<p class="text-lg text-neutral-600 dark:text-neutral-400">
+						Something went wrong on our end. Please try again later.
+					</p>
+					<a
+						href="/"
+						class="mt-4 inline-flex items-center justify-center border border-ink dark:border-white bg-ink dark:bg-white px-5 py-3 text-sm font-semibold text-white dark:text-ink shadow-lg transition hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[8px_8px_0_0_rgba(0,0,0,0.85)] dark:hover:shadow-[8px_8px_0_0_rgba(255,255,255,0.3)]"
+					>
+						Back to home
+					</a>
+				</div>
+			</main>
+			@Footer(cfg)
+		</body>
+	</html>
+}

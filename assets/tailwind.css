@@ -1,0 +1,42 @@
+/* tailwind.css — pubengine base styles */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.01em;
+  color: #0f0f0f;
+}
+
+.dark body {
+  color: #e5e5e5;
+}
+
+/* Dark mode prose overrides for @tailwindcss/typography */
+.dark .prose {
+  --tw-prose-body: #d4d4d4;
+  --tw-prose-headings: #e5e5e5;
+  --tw-prose-links: #e5e5e5;
+  --tw-prose-bold: #e5e5e5;
+  --tw-prose-counters: #a3a3a3;
+  --tw-prose-bullets: #a3a3a3;
+  --tw-prose-hr: #404040;
+  --tw-prose-quotes: #d4d4d4;
+  --tw-prose-quote-borders: #404040;
+  --tw-prose-captions: #a3a3a3;
+  --tw-prose-code: #e5e5e5;
+  --tw-prose-pre-code: #d4d4d4;
+  --tw-prose-pre-bg: #1a1a1a;
+  --tw-prose-th-borders: #404040;
+  --tw-prose-td-borders: #262626;
+}

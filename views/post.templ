@@ -1,0 +1,135 @@
+package views
+
+import "net/url"
+
+// Post renders a full blog post page with <html> wrapper.
+templ Post(cfg SiteConfig, post BlogPost, posts []BlogPost) {
+	<!DOCTYPE html>
+	<html lang="en">
+		@HeadWithMeta(cfg, PageMeta{
+			Title:       post.Title + " — " + cfg.Name,
+			Description: post.Summary,
+			URL:         cfg.URL + "/blog/" + post.Slug + "/",
+			OGType:      "article",
+		})
+		<body class="bg-white dark:bg-neutral-900 text-ink dark:text-white antialiased">
+			@JsonLD(BlogPostingJsonLD(cfg, post))
+			@Nav(cfg)
+			<div id="main-content">
+				@postContent(post, posts)
+				@Footer(cfg)
+			</div>
+		</body>
+	</html>
+}
+
+script setTitle(title string) {
+	document.title = title;
+}
+
+// PostPartial returns post content without the <html> wrapper, for HTMX swaps.
+templ PostPartial(cfg SiteConfig, post BlogPost, posts []BlogPost) {
+	@setTitle(post.Title + " — " + cfg.Name)
+	@postContent(post, posts)
+	@Footer(cfg)
+}
+
+// postContent renders the post header, article body, related posts, and back link.
+templ postContent(post BlogPost, posts []BlogPost) {
+	<div class="pt-20"></div>
+	<main class="px-4 pb-16 pt-10">
+		<div class="mx-auto flex max-w-screen-lg flex-col gap-8">
+			<header class="space-y-3">
+				<div class="flex flex-wrap items-center gap-3 text-sm text-neutral-600 dark:text-neutral-400">
+					<span class="font-semibold uppercase tracking-[0.18em] text-xs">Blog</span>
+					<span>•</span>
+					<span>{ post.Date }</span>
+					<div class="flex flex-wrap gap-2">
+						for _, tag:=range post.Tags {
+							<a
+								href={ "/?tag=" + url.PathEscape(tag) + "#blog" }
+								class={ TagClass(false) }
+							>{ tag }</a>
+						}
+					</div>
+				</div>
+				<h1 class="text-4xl font-bold tracking-tight md:text-5xl">{ post.Title }</h1>
+				<p class="max-w-3xl text-lg text-neutral-700 dark:text-neutral-300">{ post.Summary }</p>
+			</header>
+			<article
+				class="prose prose-lg max-w-none text-neutral-800 dark:text-neutral-200 prose-headings:tracking-tight
+          prose-a:text-ink dark:prose-a:text-white prose-strong:text-ink dark:prose-strong:text-white"
+			>
+				@Markdown(post.Content)
+			</article>
+			@MorePosts(post, posts)
+			<div class="flex items-center gap-3">
+				<a
+					href="/#blog"
+					hx-get="/?partial=home"
+					hx-target="#main-content"
+					hx-swap="innerHTML"
+					hx-push-url="/"
+					class="inline-flex items-center justify-center
+            border border-ink dark:border-white bg-white dark:bg-neutral-800 dark:text-white px-4 py-2 text-sm font-semibold shadow-sm
+            hover:-translate-x-1 hover:-translate-y-1 hover:shadow-[6px_6px_0_rgba(0,0,0,0.8)] dark:hover:shadow-[6px_6px_0_rgba(255,255,255,0.2)] transition"
+				>
+					← Back to blog
+				</a>
+			</div>
+		</div>
+	</main>
+}
+
+// MorePosts renders a "keep reading" section with related posts.
+templ MorePosts(current BlogPost, posts []BlogPost) {
+	<section class="rounded border border-ink/20 dark:border-white/20 bg-white/70 dark:bg-neutral-800/70 p-5 shadow-sm">
+		<div class="flex flex-col gap-3">
+			<div class="flex items-center justify-between gap-2">
+				<div>
+					<p
+						class="text-xs font-semibold uppercase
+                    tracking-[0.18em] text-neutral-600 dark:text-neutral-400"
+					>More posts</p>
+					<h3 class="text-xl font-semibold">Keep reading</h3>
+				</div>
+				<a
+					class="text-sm font-semibold underline decoration-2
+                  underline-offset-4"
+					href="/#blog"
+					hx-get="/?partial=home"
+					hx-target="#main-content"
+					hx-swap="innerHTML"
+					hx-push-url="/#blog"
+				>All posts </a>
+			</div>
+			if len(FilterRelatedPosts(current, posts)) == 0 {
+				<p class="text-sm text-neutral-600 dark:text-neutral-400">No related posts yet.</p>
+			} else {
+				<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+					for _, rel := range FilterRelatedPosts(current, posts) {
+						<a
+							href={ rel.Link }
+							hx-get={ string(rel.Link) + "/?partial=post" }
+							hx-target="#main-content"
+							hx-swap="innerHTML"
+							hx-push-url={ rel.Link }
+							class="flex flex-col gap-2 rounded border border-ink dark:border-white/20
+            bg-white dark:bg-neutral-700 px-4 py-3 text-left shadow-sm transition
+            hover:-translate-y-1 hover:shadow-lg"
+						>
+							<div
+								class="flex items-center gap-2 text-xs
+              font-semibold uppercase tracking-[0.14em] text-neutral-600 dark:text-neutral-400"
+							>
+								<span>{ rel.Date }</span>
+							</div>
+							<p class="text-lg font-semibold leading-snug">{ rel.Title }</p>
+							<p class="text-sm text-neutral-600 dark:text-neutral-400">{ rel.Summary }</p>
+						</a>
+					}
+				</div>
+			}
+		</div>
+	</section>
+}

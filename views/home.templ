@@ -1,0 +1,143 @@
+package views
+
+// Home renders the full home page with blog listing.
+templ Home(cfg SiteConfig, posts []BlogPost, activeTag string, tags []string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		@HeadWithMeta(cfg, PageMeta{
+			Title:       cfg.Name,
+			Description: cfg.Description,
+			URL:         cfg.URL + "/",
+			OGType:      "website",
+		})
+		<body class="bg-white dark:bg-neutral-900 text-ink dark:text-white antialiased" hx-on::response-error="document.getElementById('htmx-error').classList.remove('hidden'); setTimeout(function(){ document.getElementById('htmx-error').classList.add('hidden') }, 4000)">
+			@JsonLD(WebsiteJsonLD(cfg))
+			@Nav(cfg)
+			<div id="main-content">
+				if len(posts) == 0 && activeTag == "" {
+					@Welcome()
+				}
+				@BlogSection(posts, activeTag, tags)
+				@Footer(cfg)
+			</div>
+			<div id="htmx-error" class="hidden fixed bottom-4 right-4 z-50 rounded border border-red-400 bg-red-50 dark:bg-red-900/80 dark:border-red-600 px-4 py-3 text-sm font-semibold text-red-800 dark:text-red-200 shadow-lg">
+				Something went wrong. Please try again.
+			</div>
+		</body>
+	</html>
+}
+
+// BlogSectionPartial returns just the blog section for HTMX partial swaps.
+templ BlogSectionPartial(posts []BlogPost, activeTag string, tags []string) {
+	@BlogSection(posts, activeTag, tags)
+}
+
+script setHomeTitle(name string) {
+	document.title = name;
+}
+
+// HomePartial returns the full home page content (without <html> wrapper) for HTMX navigation.
+templ HomePartial(cfg SiteConfig, posts []BlogPost, activeTag string, tags []string) {
+	@setHomeTitle(cfg.Name)
+	@BlogSection(posts, activeTag, tags)
+	@Footer(cfg)
+}
+
+// BlogSection renders the blog post listing with tag filters.
+templ BlogSection(posts []BlogPost, activeTag string, tags []string) {
+	<section id="blog" class="relative bg-white/80 dark:bg-neutral-900/80 px-4 py-16 md:py-20 pt-28 md:pt-32">
+		<div class="mx-auto flex max-w-screen-xl flex-col gap-4">
+			<p class="text-xs font-semibold uppercase tracking-[0.2em]">Blog</p>
+			<h2 class="text-3xl font-semibold tracking-tight md:text-4xl">Recent writing</h2>
+			<div class="flex flex-wrap items-center gap-2 pt-2">
+				for _, tag := range tags {
+					if tag == activeTag {
+						<span class="inline-flex items-center gap-1 rounded border border-ink dark:border-white bg-ink dark:bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white dark:text-ink">
+							{ tag }
+							<a
+								href="/#blog"
+								hx-get="/?partial=blog"
+								hx-target="#blog"
+								hx-swap="outerHTML"
+								hx-push-url="/"
+								class="ml-0.5 hover:opacity-70 transition"
+								aria-label={ "Remove " + tag + " filter" }
+							>
+								✕
+							</a>
+						</span>
+					} else {
+						<a
+							href={ "/?tag=" + PathEscape(tag) + "#blog" }
+							hx-get={ "/?tag=" + PathEscape(tag) + "&partial=blog" }
+							hx-target="#blog"
+							hx-swap="outerHTML"
+							hx-push-url="true"
+							class="inline-flex items-center rounded border border-ink dark:border-white/30 bg-stone-100 dark:bg-neutral-700 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] hover:-translate-y-0.5 hover:shadow-sm transition"
+						>
+							{ tag }
+						</a>
+					}
+				}
+				if activeTag != "" {
+					<a
+						href="/#blog"
+						hx-get="/?partial=blog"
+						hx-target="#blog"
+						hx-swap="outerHTML"
+						hx-push-url="/"
+						class="inline-flex items-center rounded border border-red-400 dark:border-red-500 bg-red-50 dark:bg-red-900/40 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-red-700 dark:text-red-300 hover:-translate-y-0.5 hover:shadow-sm transition"
+					>
+						Clear filter
+					</a>
+				}
+			</div>
+			<div class="grid grid-cols-1 gap-4 pt-4 sm:grid-cols-2 lg:grid-cols-3">
+				for _, post:= range posts {
+					<article class="flex flex-col gap-3 rounded border border-ink dark:border-white/20 bg-white dark:bg-neutral-800 p-4 shadow-lg transition hover:-translate-y-1 hover:shadow-2xl">
+						<div class="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+							<span>{ post.Date }</span>
+						</div>
+						<h3 class="text-xl font-semibold leading-snug">{ post.Title }</h3>
+						<p class="text-neutral-600 dark:text-neutral-400">{ post.Summary }</p>
+						<div class="flex flex-wrap gap-2">
+							for _, tag:= range post.Tags {
+								<a
+									href={ "/?tag=" + PathEscape(tag) + "#blog" }
+									hx-get={ "/?tag=" + PathEscape(tag) + "&partial=blog" }
+									hx-target="#blog"
+									hx-swap="outerHTML"
+									hx-push-url="true"
+									class="inline-flex items-center rounded border border-ink dark:border-white/30 bg-stone-100 dark:bg-neutral-700 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] hover:-translate-y-0.5 hover:shadow-sm transition"
+								>
+									{ tag }
+								</a>
+							}
+						</div>
+						<a
+							href={ post.Link }
+							hx-get={ string(post.Link) + "/?partial=post" }
+							hx-target="#main-content"
+							hx-swap="innerHTML"
+							hx-push-url={ post.Link }
+							class="mt-auto text-sm font-semibold underline decoration-2 underline-offset-4"
+						>
+							Read →
+						</a>
+					</article>
+				}
+			</div>
+		</div>
+	</section>
+}
+
+// Welcome renders a header section shown on a fresh install with no posts.
+templ Welcome() {
+	<section class="px-4 pt-32 pb-12 md:pt-40 md:pb-16">
+		<div class="mx-auto max-w-screen-xl">
+			<h1 class="text-5xl font-bold tracking-tight md:text-7xl">pubEngine</h1>
+			<p class="mt-3 text-lg text-neutral-600 dark:text-neutral-400">small publishing engine</p>
+			<p class="mt-6 text-sm font-semibold uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-500">it works!</p>
+		</div>
+	</section>
+}
