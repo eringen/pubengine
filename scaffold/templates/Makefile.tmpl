@@ -18,6 +18,7 @@ $(TAILWINDCSS):
 
 templ:
 	$(TEMPL) generate
+	go mod tidy
 
 run: templ css
 	ADMIN_PASSWORD=dev-only ADMIN_SESSION_SECRET=dev-secret-change-in-prod go run .
