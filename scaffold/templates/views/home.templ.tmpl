@@ -66,8 +66,10 @@ templ BlogSection(posts []pubengine.BlogPost, activeTag string, tags []string) {
 				}
 			</div>
 		}
-		if len(posts) == 0 {
-			<p class="text-gray-500 dark:text-gray-400">No posts yet.</p>
+		if len(posts) == 0 && activeTag == "" {
+			@Welcome()
+		} else if len(posts) == 0 {
+			<p class="text-gray-500 dark:text-gray-400">No posts found.</p>
 		}
 		<div class="space-y-8">
 			for _, post := range posts {
@@ -99,4 +101,22 @@ templ BlogSection(posts []pubengine.BlogPost, activeTag string, tags []string) {
 			}
 		</div>
 	</div>
+}
+
+// Welcome renders the default landing page for a fresh pubengine install.
+templ Welcome() {
+	<section class="py-24 text-center">
+		<h1 class="text-6xl font-bold tracking-tight md:text-8xl text-gray-900 dark:text-white">
+			pubEngine
+		</h1>
+		<p class="mt-4 text-lg text-gray-500 dark:text-gray-400">
+			small publishing engine
+		</p>
+		<p class="mt-8 text-sm font-semibold uppercase tracking-widest text-green-600 dark:text-green-400">
+			it works!
+		</p>
+		<div class="mt-12 text-sm text-gray-400 dark:text-gray-500">
+			<p>Head to <a href="/admin/" class="underline hover:text-gray-600 dark:hover:text-gray-300">/admin</a> to write your first post.</p>
+		</div>
+	</section>
 }
