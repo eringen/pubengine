@@ -1,4 +1,4 @@
-package main
+package pubengine
 
 import (
 	"testing"
@@ -6,7 +6,7 @@ import (
 )
 
 func TestLoginLimiterBlocksAfterMax(t *testing.T) {
-	limiter := newLoginLimiter(2, 200*time.Millisecond)
+	limiter := NewLoginLimiter(2, 200*time.Millisecond)
 	ip := "203.0.113.10"
 
 	if !limiter.Allow(ip) {
@@ -21,7 +21,7 @@ func TestLoginLimiterBlocksAfterMax(t *testing.T) {
 }
 
 func TestLoginLimiterResetsAfterWindow(t *testing.T) {
-	limiter := newLoginLimiter(1, 150*time.Millisecond)
+	limiter := NewLoginLimiter(1, 150*time.Millisecond)
 	ip := "203.0.113.20"
 
 	if !limiter.Allow(ip) {
@@ -38,7 +38,7 @@ func TestLoginLimiterResetsAfterWindow(t *testing.T) {
 }
 
 func TestLoginLimiterIsPerIP(t *testing.T) {
-	limiter := newLoginLimiter(1, 200*time.Millisecond)
+	limiter := NewLoginLimiter(1, 200*time.Millisecond)
 
 	if !limiter.Allow("203.0.113.30") {
 		t.Fatalf("expected first ip to be allowed")

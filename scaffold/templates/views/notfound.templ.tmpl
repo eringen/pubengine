@@ -1,0 +1,17 @@
+package views
+
+// NotFound renders a 404 page.
+templ NotFound() {
+	<!DOCTYPE html>
+	<html lang="en" class="bg-white dark:bg-gray-900">
+		@DarkModeScript()
+		@Head("Not Found | {{.SiteName}}")
+		<body class="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-center justify-center">
+			<div class="text-center">
+				<h1 class="text-6xl font-bold mb-4">404</h1>
+				<p class="text-lg text-gray-500 dark:text-gray-400 mb-8">Page not found</p>
+				<a href="/" class="text-blue-600 dark:text-blue-400 hover:underline">Back to home</a>
+			</div>
+		</body>
+	</html>
+}

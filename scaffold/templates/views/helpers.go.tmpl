@@ -1,0 +1,8 @@
+package views
+
+import "github.com/eringen/pubengine"
+
+// Re-export types for template convenience so views can reference
+// BlogPost and PageMeta without the pubengine prefix.
+type BlogPost = pubengine.BlogPost
+type PageMeta = pubengine.PageMeta

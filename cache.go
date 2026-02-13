@@ -1,42 +1,43 @@
-package main
+package pubengine
 
 import (
 	"database/sql"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/eringen/pubengine/views"
 )
 
-var errNotFound = sql.ErrNoRows
+// ErrNotFound is returned when a requested post does not exist.
+var ErrNotFound = sql.ErrNoRows
 
-type postCache struct {
-	mu       sync.RWMutex
-	posts    []views.BlogPost // all published posts (no tag filter)
-	tags     []string
-	fetched  time.Time
-	ttl      time.Duration
-	store    *store
+// PostCache is an in-memory cache of published blog posts and tags with TTL.
+type PostCache struct {
+	mu      sync.Mutex
+	posts   []BlogPost
+	tags    []string
+	fetched time.Time
+	ttl     time.Duration
+	store   *Store
 }
 
-func newPostCache(s *store, ttl time.Duration) *postCache {
-	return &postCache{store: s, ttl: ttl}
+// NewPostCache creates a PostCache backed by the given Store.
+func NewPostCache(s *Store, ttl time.Duration) *PostCache {
+	return &PostCache{store: s, ttl: ttl}
 }
 
-func (c *postCache) valid() bool {
+func (c *PostCache) valid() bool {
 	return c.posts != nil && time.Since(c.fetched) < c.ttl
 }
 
-func (c *postCache) Invalidate() {
+// Invalidate clears the cache so the next read triggers a fresh load.
+func (c *PostCache) Invalidate() {
 	c.mu.Lock()
 	c.posts = nil
 	c.tags = nil
 	c.mu.Unlock()
 }
 
-// load fetches posts and tags into cache if stale. Must be called under write lock.
-func (c *postCache) load() error {
+func (c *PostCache) load() error {
 	if c.valid() {
 		return nil
 	}
@@ -55,7 +56,7 @@ func (c *postCache) load() error {
 }
 
 // ListPosts returns published posts, optionally filtered by tag.
-func (c *postCache) ListPosts(tag string) ([]views.BlogPost, error) {
+func (c *PostCache) ListPosts(tag string) ([]BlogPost, error) {
 	c.mu.Lock()
 	if err := c.load(); err != nil {
 		c.mu.Unlock()
@@ -68,7 +69,7 @@ func (c *postCache) ListPosts(tag string) ([]views.BlogPost, error) {
 		return posts, nil
 	}
 	normalized := normalizeTag(tag)
-	var filtered []views.BlogPost
+	var filtered []BlogPost
 	for _, p := range posts {
 		for _, t := range p.Tags {
 			if normalizeTag(t) == normalized {
@@ -80,8 +81,8 @@ func (c *postCache) ListPosts(tag string) ([]views.BlogPost, error) {
 	return filtered, nil
 }
 
-// ListTags returns all tags from published posts.
-func (c *postCache) ListTags() ([]string, error) {
+// ListTags returns all unique tags from published posts.
+func (c *PostCache) ListTags() ([]string, error) {
 	c.mu.Lock()
 	if err := c.load(); err != nil {
 		c.mu.Unlock()
@@ -92,12 +93,12 @@ func (c *postCache) ListTags() ([]string, error) {
 	return tags, nil
 }
 
-// GetPost returns a single published post by slug.
-func (c *postCache) GetPost(slug string) (views.BlogPost, error) {
+// GetPost returns a single published post by slug from the cache.
+func (c *PostCache) GetPost(slug string) (BlogPost, error) {
 	c.mu.Lock()
 	if err := c.load(); err != nil {
 		c.mu.Unlock()
-		return views.BlogPost{}, err
+		return BlogPost{}, err
 	}
 	posts := c.posts
 	c.mu.Unlock()
@@ -107,7 +108,7 @@ func (c *postCache) GetPost(slug string) (views.BlogPost, error) {
 			return p, nil
 		}
 	}
-	return views.BlogPost{}, errNotFound
+	return BlogPost{}, ErrNotFound
 }
 
 func normalizeTag(t string) string {

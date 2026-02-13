@@ -1,0 +1,102 @@
+package views
+
+import (
+	"github.com/eringen/pubengine"
+)
+
+// Home renders the full home page with blog listing.
+templ Home(posts []pubengine.BlogPost, activeTag string, tags []string, siteURL string) {
+	<!DOCTYPE html>
+	<html lang="en" class="bg-white dark:bg-gray-900">
+		@DarkModeScript()
+		@Head("{{.SiteName}}")
+		<body class="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+			@Nav("{{.SiteName}}")
+			<main id="content" class="max-w-3xl mx-auto px-4 py-8">
+				@BlogSection(posts, activeTag, tags)
+			</main>
+			@Footer("{{.SiteName}}")
+			@JsonLD(pubengine.WebsiteJsonLD(pubengine.SiteConfig{Name: "{{.SiteName}}", URL: siteURL}))
+		</body>
+	</html>
+}
+
+// HomePartial renders the home page content for HTMX partial updates.
+templ HomePartial(posts []pubengine.BlogPost, activeTag string, tags []string, siteURL string) {
+	<title>{{.SiteName}}</title>
+	<main id="content" class="max-w-3xl mx-auto px-4 py-8">
+		@BlogSection(posts, activeTag, tags)
+	</main>
+}
+
+// BlogSection renders the blog post listing with tag filter.
+templ BlogSection(posts []pubengine.BlogPost, activeTag string, tags []string) {
+	<div id="blog-section">
+		if len(tags) > 0 {
+			<div class="flex flex-wrap gap-2 mb-8">
+				<a
+					href="/?partial=blog"
+					hx-get="/?partial=blog"
+					hx-target="#blog-section"
+					hx-swap="outerHTML"
+					hx-push-url="/"
+					if activeTag == "" {
+						class="px-3 py-1 text-sm rounded-full bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+					} else {
+						class="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+					}
+				>
+					All
+				</a>
+				for _, tag := range tags {
+					<a
+						href={ templ.SafeURL("/?tag=" + pubengine.PathEscape(tag) + "&partial=blog") }
+						hx-get={ "/?tag=" + pubengine.PathEscape(tag) + "&partial=blog" }
+						hx-target="#blog-section"
+						hx-swap="outerHTML"
+						hx-push-url={ "/?tag=" + pubengine.PathEscape(tag) }
+						if tag == activeTag {
+							class="px-3 py-1 text-sm rounded-full bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+						} else {
+							class="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+						}
+					>
+						{ tag }
+					</a>
+				}
+			</div>
+		}
+		if len(posts) == 0 {
+			<p class="text-gray-500 dark:text-gray-400">No posts yet.</p>
+		}
+		<div class="space-y-8">
+			for _, post := range posts {
+				<article class="group">
+					<a
+						href={ templ.SafeURL(post.Link + "/") }
+						hx-get={ post.Link + "/?partial=post" }
+						hx-target="#content"
+						hx-swap="outerHTML"
+						hx-push-url={ post.Link + "/" }
+						class="block"
+					>
+						<h2 class="text-xl font-semibold group-hover:text-blue-600 dark:group-hover:text-blue-400">
+							{ post.Title }
+						</h2>
+						<time class="text-sm text-gray-500 dark:text-gray-400">{ post.Date }</time>
+						if post.Summary != "" {
+							<p class="mt-2 text-gray-600 dark:text-gray-300">{ post.Summary }</p>
+						}
+					</a>
+					if len(post.Tags) > 0 {
+						<div class="mt-2 flex gap-2">
+							for _, tag := range post.Tags {
+								<span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-gray-600 dark:text-gray-400">{ tag }</span>
+							}
+						</div>
+					}
+				</article>
+			}
+		</div>
+	</div>
+}

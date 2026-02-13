@@ -1,38 +1,42 @@
-package main
+package pubengine
 
 import (
 	"database/sql"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/eringen/pubengine/views"
 )
 
-type store struct {
+// Store wraps a SQLite database and provides CRUD operations for blog posts.
+type Store struct {
 	db *sql.DB
 }
 
-func newStore(path string) (*store, error) {
-	if err := os.MkdirAll("data", 0o755); err != nil {
+// NewStore opens (or creates) the SQLite database at path, ensures the data
+// directory exists, and runs schema migrations.
+func NewStore(path string) (*Store, error) {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
 	}
-	s := &store{db: db}
+	s := &Store{db: db}
 	if err := s.ensureSchema(); err != nil {
 		return nil, err
 	}
 	return s, nil
 }
 
-func (s *store) Close() error {
+// Close closes the underlying database connection.
+func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-func (s *store) ensureSchema() error {
+func (s *Store) ensureSchema() error {
 	_, err := s.db.Exec(`
 CREATE TABLE IF NOT EXISTS posts (
     slug TEXT PRIMARY KEY,
@@ -48,7 +52,6 @@ CREATE TABLE IF NOT EXISTS posts (
 		return err
 	}
 	if _, err := s.db.Exec(`ALTER TABLE posts ADD COLUMN published INTEGER NOT NULL DEFAULT 1;`); err != nil {
-		// ignore if column already exists
 		if strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
 			return nil
 		}
@@ -57,8 +60,9 @@ CREATE TABLE IF NOT EXISTS posts (
 	return nil
 }
 
-
-func (s *store) ListPosts(tag string) ([]views.BlogPost, error) {
+// ListPosts returns all published posts ordered by date descending.
+// If tag is non-empty, results are filtered to posts containing that tag.
+func (s *Store) ListPosts(tag string) ([]BlogPost, error) {
 	var rows *sql.Rows
 	var err error
 	if tag == "" {
@@ -72,18 +76,18 @@ func (s *store) ListPosts(tag string) ([]views.BlogPost, error) {
 	}
 	defer rows.Close()
 
-	var posts []views.BlogPost
+	var posts []BlogPost
 	for rows.Next() {
 		var slug, title, date, tags, summary, content string
 		var published int
 		if err := rows.Scan(&slug, &title, &date, &tags, &summary, &content, &published); err != nil {
 			return nil, err
 		}
-		post := views.BlogPost{
+		post := BlogPost{
 			Slug:      slug,
 			Title:     title,
 			Date:      date,
-			Tags:      parseTags(tags),
+			Tags:      ParseTags(tags),
 			Summary:   summary,
 			Content:   content,
 			Link:      "/blog/" + slug,
@@ -94,7 +98,8 @@ func (s *store) ListPosts(tag string) ([]views.BlogPost, error) {
 	return posts, nil
 }
 
-func (s *store) ListTags() ([]string, error) {
+// ListTags returns a sorted, deduplicated slice of all tags from published posts.
+func (s *Store) ListTags() ([]string, error) {
 	rows, err := s.db.Query(`SELECT tags FROM posts WHERE published = 1`)
 	if err != nil {
 		return nil, err
@@ -107,7 +112,7 @@ func (s *store) ListTags() ([]string, error) {
 		if err := rows.Scan(&tags); err != nil {
 			return nil, err
 		}
-		for _, t := range parseTags(tags) {
+		for _, t := range ParseTags(tags) {
 			set[strings.ToLower(t)] = struct{}{}
 		}
 	}
@@ -122,19 +127,20 @@ func (s *store) ListTags() ([]string, error) {
 	return result, nil
 }
 
-func (s *store) GetPost(slug string) (views.BlogPost, error) {
+// GetPost returns a single published post by slug.
+func (s *Store) GetPost(slug string) (BlogPost, error) {
 	var title, date, tags, summary, content string
 	var published int
 	err := s.db.QueryRow(`SELECT title, date, tags, summary, content, published FROM posts WHERE slug = ? AND published = 1`, slug).
 		Scan(&title, &date, &tags, &summary, &content, &published)
 	if err != nil {
-		return views.BlogPost{}, err
+		return BlogPost{}, err
 	}
-	return views.BlogPost{
+	return BlogPost{
 		Slug:      slug,
 		Title:     title,
 		Date:      date,
-		Tags:      parseTags(tags),
+		Tags:      ParseTags(tags),
 		Summary:   summary,
 		Content:   content,
 		Link:      "/blog/" + slug,
@@ -142,19 +148,20 @@ func (s *store) GetPost(slug string) (views.BlogPost, error) {
 	}, nil
 }
 
-func (s *store) GetPostAny(slug string) (views.BlogPost, error) {
+// GetPostAny returns a post by slug regardless of published status (for admin).
+func (s *Store) GetPostAny(slug string) (BlogPost, error) {
 	var title, date, tags, summary, content string
 	var published int
 	err := s.db.QueryRow(`SELECT title, date, tags, summary, content, published FROM posts WHERE slug = ?`, slug).
 		Scan(&title, &date, &tags, &summary, &content, &published)
 	if err != nil {
-		return views.BlogPost{}, err
+		return BlogPost{}, err
 	}
-	return views.BlogPost{
+	return BlogPost{
 		Slug:      slug,
 		Title:     title,
 		Date:      date,
-		Tags:      parseTags(tags),
+		Tags:      ParseTags(tags),
 		Summary:   summary,
 		Content:   content,
 		Link:      "/blog/" + slug,
@@ -162,25 +169,26 @@ func (s *store) GetPostAny(slug string) (views.BlogPost, error) {
 	}, nil
 }
 
-func (s *store) ListAllPosts() ([]views.BlogPost, error) {
+// ListAllPosts returns every post (published and drafts) ordered by date descending.
+func (s *Store) ListAllPosts() ([]BlogPost, error) {
 	rows, err := s.db.Query(`SELECT slug, title, date, tags, summary, content, published FROM posts ORDER BY date DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var posts []views.BlogPost
+	var posts []BlogPost
 	for rows.Next() {
 		var slug, title, date, tags, summary, content string
 		var published int
 		if err := rows.Scan(&slug, &title, &date, &tags, &summary, &content, &published); err != nil {
 			return nil, err
 		}
-		posts = append(posts, views.BlogPost{
+		posts = append(posts, BlogPost{
 			Slug:      slug,
 			Title:     title,
 			Date:      date,
-			Tags:      parseTags(tags),
+			Tags:      ParseTags(tags),
 			Summary:   summary,
 			Content:   content,
 			Link:      "/blog/" + slug,
@@ -190,7 +198,8 @@ func (s *store) ListAllPosts() ([]views.BlogPost, error) {
 	return posts, nil
 }
 
-func (s *store) SavePost(p views.BlogPost) error {
+// SavePost upserts a blog post. Tags are normalized to lowercase.
+func (s *Store) SavePost(p BlogPost) error {
 	normalizedTags := make([]string, len(p.Tags))
 	for i, t := range p.Tags {
 		normalizedTags[i] = strings.ToLower(strings.TrimSpace(t))
@@ -205,12 +214,14 @@ func (s *store) SavePost(p views.BlogPost) error {
 	return err
 }
 
-func (s *store) DeletePost(slug string) error {
+// DeletePost removes a post by slug.
+func (s *Store) DeletePost(slug string) error {
 	_, err := s.db.Exec(`DELETE FROM posts WHERE slug = ?`, slug)
 	return err
 }
 
-func parseTags(tagString string) []string {
+// ParseTags splits a comma-delimited tag string (e.g. ",go,web,") into a slice.
+func ParseTags(tagString string) []string {
 	tagString = strings.Trim(tagString, ",")
 	if tagString == "" {
 		return nil

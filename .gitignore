@@ -1,15 +1,4 @@
-# Dependencies
-node_modules/
-
-# Build output
-tmp/
-public/tailwind.css
-public/app.js
-views/*_templ.go
-pubengine
-build-errors.log
-
-# Database
+# Database (test artifacts)
 data/*.db
 
 # OS
@@ -22,3 +11,7 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+# Build
+tmp/
+build-errors.log

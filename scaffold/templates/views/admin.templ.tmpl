@@ -1,0 +1,226 @@
+package views
+
+import (
+	"github.com/eringen/pubengine"
+)
+
+// AdminLogin renders the admin login form.
+templ AdminLogin(showError bool, csrfToken string) {
+	<!DOCTYPE html>
+	<html lang="en" class="bg-white dark:bg-gray-900">
+		@DarkModeScript()
+		@Head("Admin | {{.SiteName}}")
+		<body class="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-center justify-center">
+			<div class="w-full max-w-sm mx-auto p-6">
+				<h1 class="text-2xl font-bold mb-6 text-center">Admin Login</h1>
+				if showError {
+					<div class="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded text-sm">
+						Invalid password.
+					</div>
+				}
+				<form method="POST" action="/admin/login/" class="space-y-4">
+					<input type="hidden" name="_csrf" value={ csrfToken }/>
+					<div>
+						<label for="password" class="block text-sm font-medium mb-1">Password</label>
+						<input
+							type="password"
+							name="password"
+							id="password"
+							required
+							autofocus
+							class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+						/>
+					</div>
+					<button
+						type="submit"
+						class="w-full px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded font-medium hover:bg-gray-700 dark:hover:bg-gray-200"
+					>
+						Log In
+					</button>
+				</form>
+			</div>
+		</body>
+	</html>
+}
+
+// AdminDashboard renders the admin post management dashboard.
+templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken string) {
+	<!DOCTYPE html>
+	<html lang="en" class="bg-white dark:bg-gray-900">
+		@DarkModeScript()
+		@Head("Dashboard | {{.SiteName}}")
+		<body class="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+			<nav class="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+				<div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+					<a href="/admin/" class="text-lg font-bold">{{.SiteName}} Admin</a>
+					<div class="flex items-center gap-4">
+						<a href="/" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">View Site</a>
+						<form method="POST" action="/admin/logout/">
+							<input type="hidden" name="_csrf" value={ csrfToken }/>
+							<button type="submit" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Logout</button>
+						</form>
+					</div>
+				</div>
+			</nav>
+			<div class="max-w-4xl mx-auto px-4 py-8">
+				if message != "" {
+					<div class="mb-4 p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-sm">
+						if message == "saved" {
+							Post saved successfully.
+						} else if message == "deleted" {
+							Post deleted.
+						} else {
+							{ message }
+						}
+					</div>
+				}
+				<div class="flex items-center justify-between mb-6">
+					<h1 class="text-2xl font-bold">Posts</h1>
+					<button
+						hx-get="/admin/post/new/"
+						hx-target="#post-form"
+						hx-swap="innerHTML"
+						class="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-200"
+					>
+						New Post
+					</button>
+				</div>
+				<div id="post-form" class="mb-8"></div>
+				<div class="space-y-2">
+					for _, post := range posts {
+						<div class="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded">
+							<div class="flex items-center gap-3">
+								if !post.Published {
+									<span class="text-xs px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded">Draft</span>
+								}
+								<span class="font-medium">{ post.Title }</span>
+								<span class="text-sm text-gray-500 dark:text-gray-400">{ post.Date }</span>
+							</div>
+							<div class="flex items-center gap-2">
+								<button
+									hx-get={ "/admin/post/" + post.Slug + "/" }
+									hx-target="#post-form"
+									hx-swap="innerHTML"
+									class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+								>
+									Edit
+								</button>
+								<button
+									hx-delete={ "/admin/post/" + post.Slug + "/" }
+									hx-target="body"
+									hx-swap="outerHTML"
+									hx-confirm="Delete this post?"
+									hx-headers={ "{\"X-CSRF-Token\": \"" + csrfToken + "\"}" }
+									class="text-sm text-red-600 dark:text-red-400 hover:underline"
+								>
+									Delete
+								</button>
+							</div>
+						</div>
+					}
+					if len(posts) == 0 {
+						<p class="text-gray-500 dark:text-gray-400">No posts yet. Create your first post!</p>
+					}
+				</div>
+			</div>
+		</body>
+	</html>
+}
+
+// AdminFormPartial renders the post edit/create form loaded via HTMX.
+templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
+	<form method="POST" action="/admin/save/" class="space-y-4 p-4 border border-gray-200 dark:border-gray-700 rounded">
+		<input type="hidden" name="_csrf" value={ csrfToken }/>
+		<div class="grid grid-cols-2 gap-4">
+			<div>
+				<label for="title" class="block text-sm font-medium mb-1">Title</label>
+				<input
+					type="text"
+					name="title"
+					id="title"
+					value={ post.Title }
+					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+				/>
+			</div>
+			<div>
+				<label for="slug" class="block text-sm font-medium mb-1">Slug</label>
+				<input
+					type="text"
+					name="slug"
+					id="slug"
+					value={ post.Slug }
+					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+				/>
+			</div>
+		</div>
+		<div class="grid grid-cols-2 gap-4">
+			<div>
+				<label for="date" class="block text-sm font-medium mb-1">Date</label>
+				<input
+					type="date"
+					name="date"
+					id="date"
+					value={ post.Date }
+					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+				/>
+			</div>
+			<div>
+				<label for="tags" class="block text-sm font-medium mb-1">Tags (comma-separated)</label>
+				<input
+					type="text"
+					name="tags"
+					id="tags"
+					value={ pubengine.JoinTags(post.Tags) }
+					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+				/>
+			</div>
+		</div>
+		<div>
+			<label for="summary" class="block text-sm font-medium mb-1">Summary</label>
+			<input
+				type="text"
+				name="summary"
+				id="summary"
+				value={ post.Summary }
+				class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+			/>
+		</div>
+		<div>
+			<label for="content" class="block text-sm font-medium mb-1">Content (Markdown)</label>
+			<textarea
+				name="content"
+				id="content"
+				rows="12"
+				class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+			>{ post.Content }</textarea>
+		</div>
+		<div class="flex items-center gap-4">
+			<label class="flex items-center gap-2">
+				<input
+					type="checkbox"
+					name="published"
+					if post.Published {
+						checked
+					}
+					class="rounded border-gray-300 dark:border-gray-600"
+				/>
+				<span class="text-sm">Published</span>
+			</label>
+		</div>
+		<div class="flex items-center gap-2">
+			<button
+				type="submit"
+				class="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-200"
+			>
+				Save
+			</button>
+			<button
+				type="button"
+				onclick="document.getElementById('post-form').innerHTML = ''"
+				class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+			>
+				Cancel
+			</button>
+		</div>
+	</form>
+}

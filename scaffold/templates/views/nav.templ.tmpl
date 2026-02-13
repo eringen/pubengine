@@ -1,0 +1,87 @@
+package views
+
+import "github.com/eringen/pubengine"
+
+// Head renders the standard HTML <head> with meta tags and asset links.
+templ Head(siteName string) {
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>{ siteName }</title>
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+		<link rel="stylesheet" href="/public/tailwind.css"/>
+		<script src="/public/htmx.min.js"></script>
+	</head>
+}
+
+// HeadWithMeta renders <head> with custom page metadata for SEO.
+templ HeadWithMeta(meta pubengine.PageMeta, siteName string) {
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>{ meta.Title } | { siteName }</title>
+		if meta.Description != "" {
+			<meta name="description" content={ meta.Description }/>
+		}
+		if meta.URL != "" {
+			<link rel="canonical" href={ meta.URL }/>
+			<meta property="og:url" content={ meta.URL }/>
+		}
+		if meta.OGType != "" {
+			<meta property="og:type" content={ meta.OGType }/>
+		}
+		<meta property="og:title" content={ meta.Title }/>
+		if meta.Description != "" {
+			<meta property="og:description" content={ meta.Description }/>
+		}
+		<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
+		<link rel="stylesheet" href="/public/tailwind.css"/>
+		<script src="/public/htmx.min.js"></script>
+	</head>
+}
+
+// Nav renders the site navigation bar.
+templ Nav(siteName string) {
+	<nav class="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+		<div class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+			<a href="/" class="text-lg font-bold text-gray-900 dark:text-white hover:text-gray-600 dark:hover:text-gray-300">
+				{ siteName }
+			</a>
+			<div class="flex items-center gap-4">
+				<a href="/" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Blog</a>
+				<a href="/feed.xml" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">RSS</a>
+				<button
+					onclick="document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light')"
+					class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+				>
+					Toggle Dark
+				</button>
+			</div>
+		</div>
+	</nav>
+}
+
+// Footer renders the site footer.
+templ Footer(siteName string) {
+	<footer class="border-t border-gray-200 dark:border-gray-700 mt-16 py-8">
+		<div class="max-w-3xl mx-auto px-4 text-center text-sm text-gray-500 dark:text-gray-400">
+			<p>Powered by <a href="https://github.com/eringen/pubengine" class="underline hover:text-gray-700 dark:hover:text-gray-300">pubengine</a></p>
+		</div>
+	</footer>
+}
+
+// JsonLD renders a JSON-LD script tag.
+templ JsonLD(data string) {
+	<script type="application/ld+json">
+		{ data }
+	</script>
+}
+
+// DarkModeScript renders the inline script that restores the user's theme preference.
+templ DarkModeScript() {
+	<script>
+		if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+			document.documentElement.classList.add('dark');
+		}
+	</script>
+}

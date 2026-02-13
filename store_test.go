@@ -1,4 +1,4 @@
-package main
+package pubengine
 
 import (
 	"database/sql"
@@ -6,16 +6,14 @@ import (
 	"testing"
 
 	_ "modernc.org/sqlite"
-
-	"github.com/eringen/pubengine/views"
 )
 
-func setupTestStore(t *testing.T) (*store, func()) {
+func setupTestStore(t *testing.T) (*Store, func()) {
 	t.Helper()
 	path := "data/test_blog.db"
 	os.Remove(path) // clean up any existing test db
 
-	s, err := newStore(path)
+	s, err := NewStore(path)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}
@@ -44,7 +42,7 @@ func TestSaveAndGetPost(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	post := views.BlogPost{
+	post := BlogPost{
 		Slug:      "test-post",
 		Title:     "Test Post",
 		Date:      "2024-01-15",
@@ -95,7 +93,7 @@ func TestSavePostUpdate(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	post := views.BlogPost{
+	post := BlogPost{
 		Slug:      "update-test",
 		Title:     "Original Title",
 		Date:      "2024-01-01",
@@ -143,7 +141,7 @@ func TestGetPostUnpublished(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	post := views.BlogPost{
+	post := BlogPost{
 		Slug:      "unpublished-post",
 		Title:     "Unpublished Post",
 		Date:      "2024-01-01",
@@ -177,7 +175,7 @@ func TestListPosts(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	posts := []views.BlogPost{
+	posts := []BlogPost{
 		{Slug: "post-1", Title: "Post 1", Date: "2024-01-01", Tags: []string{"go"}, Summary: "s1", Content: "c1", Published: true},
 		{Slug: "post-2", Title: "Post 2", Date: "2024-01-02", Tags: []string{"go", "web"}, Summary: "s2", Content: "c2", Published: true},
 		{Slug: "post-3", Title: "Post 3", Date: "2024-01-03", Tags: []string{"rust"}, Summary: "s3", Content: "c3", Published: true},
@@ -210,7 +208,7 @@ func TestListPostsByTag(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	posts := []views.BlogPost{
+	posts := []BlogPost{
 		{Slug: "go-post-1", Title: "Go Post 1", Date: "2024-01-01", Tags: []string{"go", "tutorial"}, Summary: "s1", Content: "c1", Published: true},
 		{Slug: "go-post-2", Title: "Go Post 2", Date: "2024-01-02", Tags: []string{"go", "web"}, Summary: "s2", Content: "c2", Published: true},
 		{Slug: "rust-post", Title: "Rust Post", Date: "2024-01-03", Tags: []string{"rust"}, Summary: "s3", Content: "c3", Published: true},
@@ -257,7 +255,7 @@ func TestListPostsTagCaseInsensitive(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	post := views.BlogPost{
+	post := BlogPost{
 		Slug:      "case-test",
 		Title:     "Case Test",
 		Date:      "2024-01-01",
@@ -296,7 +294,7 @@ func TestListAllPosts(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	posts := []views.BlogPost{
+	posts := []BlogPost{
 		{Slug: "published", Title: "Published", Date: "2024-01-01", Tags: []string{"a"}, Summary: "s1", Content: "c1", Published: true},
 		{Slug: "unpublished", Title: "Unpublished", Date: "2024-01-02", Tags: []string{"b"}, Summary: "s2", Content: "c2", Published: false},
 	}
@@ -321,7 +319,7 @@ func TestListTags(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	posts := []views.BlogPost{
+	posts := []BlogPost{
 		{Slug: "p1", Title: "P1", Date: "2024-01-01", Tags: []string{"Go", "Web"}, Summary: "s1", Content: "c1", Published: true},
 		{Slug: "p2", Title: "P2", Date: "2024-01-02", Tags: []string{"go", "api"}, Summary: "s2", Content: "c2", Published: true},
 		{Slug: "p3", Title: "P3", Date: "2024-01-03", Tags: []string{"rust"}, Summary: "s3", Content: "c3", Published: false}, // unpublished
@@ -356,7 +354,7 @@ func TestDeletePost(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	post := views.BlogPost{
+	post := BlogPost{
 		Slug:      "to-delete",
 		Title:     "To Delete",
 		Date:      "2024-01-01",
@@ -412,14 +410,14 @@ func TestParseTags(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := parseTags(tt.input)
+		got := ParseTags(tt.input)
 		if len(got) != len(tt.want) {
-			t.Errorf("parseTags(%q) = %v, want %v", tt.input, got, tt.want)
+			t.Errorf("ParseTags(%q) = %v, want %v", tt.input, got, tt.want)
 			continue
 		}
 		for i := range got {
 			if got[i] != tt.want[i] {
-				t.Errorf("parseTags(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
+				t.Errorf("ParseTags(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
 			}
 		}
 	}
@@ -429,7 +427,7 @@ func TestEmptyTags(t *testing.T) {
 	s, cleanup := setupTestStore(t)
 	defer cleanup()
 
-	post := views.BlogPost{
+	post := BlogPost{
 		Slug:      "no-tags",
 		Title:     "No Tags",
 		Date:      "2024-01-01",

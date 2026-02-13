@@ -1,0 +1,32 @@
+TAILWINDCSS := node_modules/.bin/tailwindcss
+TAILWIND_INPUT := assets/tailwind.css
+TAILWIND_OUTPUT := public/tailwind.css
+TEMPL := $(shell go env GOPATH)/bin/templ
+
+.PHONY: css css-prod js templ run prod test build-linux
+
+css: $(TAILWIND_OUTPUT)
+
+$(TAILWIND_OUTPUT): $(TAILWIND_INPUT) tailwind.config.js package-lock.json | $(TAILWINDCSS)
+	$(TAILWINDCSS) -i $(TAILWIND_INPUT) -o $(TAILWIND_OUTPUT) --minify
+
+css-prod: $(TAILWIND_INPUT) tailwind.config.js package-lock.json | $(TAILWINDCSS)
+	NODE_ENV=production $(TAILWINDCSS) -i $(TAILWIND_INPUT) -o $(TAILWIND_OUTPUT) --minify
+
+$(TAILWINDCSS):
+	npm install
+
+templ:
+	$(TEMPL) generate
+
+run: templ css
+	ADMIN_PASSWORD=dev-only ADMIN_SESSION_SECRET=dev-secret-change-in-prod go run .
+
+prod: templ css-prod
+	ADMIN_PASSWORD=dev-only ADMIN_SESSION_SECRET=dev-secret-change-in-prod go run .
+
+test:
+	go test ./...
+
+build-linux: templ css-prod
+	GOOS=linux GOARCH=amd64 go build -o {{.ProjectName}} .

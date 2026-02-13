@@ -1,0 +1,42 @@
+package main
+
+import (
+	"log"
+
+	"github.com/eringen/pubengine"
+
+	"{{.ModuleName}}/views"
+)
+
+func main() {
+	app := pubengine.New(
+		pubengine.SiteConfig{
+			Name:          pubengine.EnvOr("SITE_NAME", "{{.SiteName}}"),
+			URL:           pubengine.EnvOr("SITE_URL", "http://localhost:3000"),
+			Description:   pubengine.EnvOr("SITE_DESCRIPTION", "A blog powered by pubengine"),
+			Author:        pubengine.EnvOr("SITE_AUTHOR", ""),
+			Addr:          pubengine.EnvOr("ADDR", ":3000"),
+			DatabasePath:  pubengine.EnvOr("DATABASE_PATH", "data/blog.db"),
+			AdminPassword: pubengine.MustEnv("ADMIN_PASSWORD"),
+			SessionSecret: pubengine.MustEnv("ADMIN_SESSION_SECRET"),
+			CookieSecure:  pubengine.EnvOr("COOKIE_SECURE", "") == "true",
+		},
+		pubengine.ViewFuncs{
+			Home:             views.Home,
+			HomePartial:      views.HomePartial,
+			BlogSection:      views.BlogSection,
+			Post:             views.Post,
+			PostPartial:      views.PostPartial,
+			AdminLogin:       views.AdminLogin,
+			AdminDashboard:   views.AdminDashboard,
+			AdminFormPartial: views.AdminFormPartial,
+			NotFound:         views.NotFound,
+			ServerError:      views.ServerError,
+		},
+	)
+	defer app.Close()
+
+	if err := app.Start(); err != nil {
+		log.Fatal(err)
+	}
+}
