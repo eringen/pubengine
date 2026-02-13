@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -99,11 +100,21 @@ func runNew(name string) error {
 		return err
 	}
 
+	// Resolve dependencies and generate go.sum.
+	fmt.Println("\nResolving Go dependencies...")
+	tidy := exec.Command("go", "mod", "tidy")
+	tidy.Dir = dirName
+	tidy.Stdout = os.Stdout
+	tidy.Stderr = os.Stderr
+	if err := tidy.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "\nWarning: go mod tidy failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Run 'cd %s && go mod tidy' manually after fixing.\n", dirName)
+	}
+
 	fmt.Println()
 	fmt.Println("Done! Next steps:")
 	fmt.Println()
 	fmt.Printf("  cd %s\n", dirName)
-	fmt.Println("  go mod tidy")
 	fmt.Println("  npm install")
 	fmt.Println("  make run")
 	fmt.Println()
