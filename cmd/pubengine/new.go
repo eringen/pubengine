@@ -57,9 +57,12 @@ func runNew(name string) error {
 		outPath := filepath.Join(dirName, relPath)
 		outPath = strings.TrimSuffix(outPath, ".tmpl")
 
-		// Rename dotenv to .env.example.
-		if filepath.Base(outPath) == "dotenv" {
+		// Rename dotfiles (embed.FS cannot store files starting with ".").
+		switch filepath.Base(outPath) {
+		case "dotenv":
 			outPath = filepath.Join(filepath.Dir(outPath), ".env.example")
+		case "dotgitignore":
+			outPath = filepath.Join(filepath.Dir(outPath), ".gitignore")
 		}
 
 		if d.IsDir() {
