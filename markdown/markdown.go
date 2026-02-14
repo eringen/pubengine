@@ -21,6 +21,7 @@ var (
 	reItalicUnderscore = regexp.MustCompile(`_([^_]+)_`)
 	reInlineCode       = regexp.MustCompile("`([^`]+)`")
 	reLink             = regexp.MustCompile(`\[(.*?)\]\((.*?)\)(\^)?`)
+	reOrderedList = regexp.MustCompile(`^(\d+)\.\s`)
 	// ![alt](url){style} or ![alt](url){style|width|height}
 	reImg = regexp.MustCompile(`\!\[(.*?)\]\((.*?)\)\{([^|}]*?)(?:\|(\d+)\|(\d+))?\}`)
 )
@@ -40,6 +41,7 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 	imageCount := 0
 	lines := strings.Split(md, "\n")
 	inList := false
+	inOrderedList := false
 	inPara := false
 	inQuote := false
 	inCode := false
@@ -76,6 +78,12 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 			inList = false
 		}
 	}
+	flushOrderedList := func() {
+		if inOrderedList {
+			buf.WriteString("</ol>")
+			inOrderedList = false
+		}
+	}
 	flushTable := func() {
 		if inTable {
 			if tableHeaderDone {
@@ -95,6 +103,7 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 			} else {
 				flushPara()
 				flushList()
+				flushOrderedList()
 				flushQuote()
 				lang := strings.TrimSpace(line[3:])
 				if lang != "" {
@@ -119,6 +128,7 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 		if strings.TrimSpace(line) == "" {
 			flushPara()
 			flushList()
+			flushOrderedList()
 			flushQuote()
 			flushTable()
 			continue
@@ -128,12 +138,14 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 		case strings.HasPrefix(line, "---"):
 			flushPara()
 			flushList()
+			flushOrderedList()
 			flushQuote()
 			flushTable()
 			buf.WriteString("<hr/>")
 		case strings.HasPrefix(line, "# "):
 			flushPara()
 			flushList()
+			flushOrderedList()
 			flushQuote()
 			flushTable()
 			buf.WriteString("<h1>")
@@ -142,6 +154,7 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 		case strings.HasPrefix(line, "## "):
 			flushPara()
 			flushList()
+			flushOrderedList()
 			flushQuote()
 			flushTable()
 			buf.WriteString("<h2>")
@@ -150,6 +163,7 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 		case strings.HasPrefix(line, "### "):
 			flushPara()
 			flushList()
+			flushOrderedList()
 			flushQuote()
 			flushTable()
 			buf.WriteString("<h3>")
@@ -159,6 +173,7 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 			if !inTable {
 				flushPara()
 				flushList()
+				flushOrderedList()
 				flushQuote()
 				buf.WriteString("<table>")
 				inTable = true
@@ -192,6 +207,7 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 		case strings.HasPrefix(line, "- "):
 			if !inList {
 				flushPara()
+				flushOrderedList()
 				flushQuote()
 				flushTable()
 				buf.WriteString("<ul>")
@@ -200,10 +216,24 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 			buf.WriteString("<li>")
 			buf.WriteString(FormatInline(strings.TrimSpace(line[2:]), &imageCount))
 			buf.WriteString("</li>")
+		case reOrderedList.MatchString(line):
+			if !inOrderedList {
+				flushPara()
+				flushList()
+				flushQuote()
+				flushTable()
+				buf.WriteString("<ol>")
+				inOrderedList = true
+			}
+			content := reOrderedList.ReplaceAllString(line, "")
+			buf.WriteString("<li>")
+			buf.WriteString(FormatInline(strings.TrimSpace(content), &imageCount))
+			buf.WriteString("</li>")
 		case strings.HasPrefix(line, "> "):
 			if !inQuote {
 				flushPara()
 				flushList()
+				flushOrderedList()
 				flushTable()
 				buf.WriteString("<blockquote>")
 				inQuote = true
@@ -212,6 +242,7 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 		default:
 			if !inPara {
 				flushList()
+				flushOrderedList()
 				flushQuote()
 				flushTable()
 				buf.WriteString("<p>")
@@ -224,6 +255,7 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 	}
 	flushPara()
 	flushList()
+	flushOrderedList()
 	flushQuote()
 	flushTable()
 	flushCode()

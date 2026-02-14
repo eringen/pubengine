@@ -219,3 +219,38 @@ func TestRenderMarkdownList(t *testing.T) {
 		t.Errorf("RenderMarkdown(%q) = %q, want %q", input, got, expected)
 	}
 }
+
+func TestRenderMarkdownOrderedList(t *testing.T) {
+	input := "1. first\n2. second\n3. third"
+	var buf bytes.Buffer
+	RenderMarkdown(&buf, input)
+	got := buf.String()
+	expected := "<ol><li>first</li><li>second</li><li>third</li></ol>"
+	if got != expected {
+		t.Errorf("RenderMarkdown(%q) = %q, want %q", input, got, expected)
+	}
+}
+
+func TestRenderMarkdownOrderedListWithInline(t *testing.T) {
+	input := "1. **bold** item\n2. *italic* item"
+	var buf bytes.Buffer
+	RenderMarkdown(&buf, input)
+	got := buf.String()
+	expected := "<ol><li><strong>bold</strong> item</li><li><em>italic</em> item</li></ol>"
+	if got != expected {
+		t.Errorf("RenderMarkdown(%q) = %q, want %q", input, got, expected)
+	}
+}
+
+func TestRenderMarkdownOrderedListFollowedByParagraph(t *testing.T) {
+	input := "1. item one\n2. item two\n\nsome text"
+	var buf bytes.Buffer
+	RenderMarkdown(&buf, input)
+	got := buf.String()
+	if !strings.Contains(got, "<ol>") || !strings.Contains(got, "</ol>") {
+		t.Errorf("expected <ol> tags: %q", got)
+	}
+	if !strings.Contains(got, "<p>") {
+		t.Errorf("expected paragraph after list: %q", got)
+	}
+}
