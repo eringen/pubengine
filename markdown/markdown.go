@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/a-h/templ"
@@ -18,6 +19,7 @@ var (
 	reBoldUnderscore   = regexp.MustCompile(`__(.+?)__`)
 	reItalic           = regexp.MustCompile(`\*([^*]+)\*`)
 	reItalicUnderscore = regexp.MustCompile(`_([^_]+)_`)
+	reInlineCode       = regexp.MustCompile("`([^`]+)`")
 	reLink             = regexp.MustCompile(`\[(.*?)\]\((.*?)\)(\^)?`)
 	// ![alt](url){style} or ![alt](url){style|width|height}
 	reImg = regexp.MustCompile(`\!\[(.*?)\]\((.*?)\)\{([^|}]*?)(?:\|(\d+)\|(\d+))?\}`)
@@ -41,12 +43,17 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 	inPara := false
 	inQuote := false
 	inCode := false
+	codeLang := false // whether the current code block has a language badge
 	inTable := false
 	tableHeaderDone := false
 
 	flushCode := func() {
 		if inCode {
 			buf.WriteString("</code></pre>")
+			if codeLang {
+				buf.WriteString("</div>")
+				codeLang = false
+			}
 			inCode = false
 			inPara = false
 		}
@@ -89,7 +96,14 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 				flushPara()
 				flushList()
 				flushQuote()
-				buf.WriteString("<pre class=\"code-block\"><code>")
+				lang := strings.TrimSpace(line[3:])
+				if lang != "" {
+					codeLang = true
+					buf.WriteString("<div class=\"code-block-wrapper\"><span class=\"code-lang\">" + html.EscapeString(lang) + "</span>")
+					buf.WriteString("<pre class=\"code-block\"><code class=\"language-" + html.EscapeString(lang) + "\">")
+				} else {
+					buf.WriteString("<pre class=\"code-block\"><code>")
+				}
 				inCode = true
 				inPara = true
 			}
@@ -310,6 +324,15 @@ func FormatInline(s string, imageCount *int) string {
 		}
 		return `<a href="` + href + `" ` + attrs + `>` + match[1] + `</a>`
 	})
+	// Inline code: extract and replace with placeholders so bold/italic
+	// regex does not format content inside backticks.
+	var inlineCodeBlocks []string
+	escaped = reInlineCode.ReplaceAllStringFunc(escaped, func(m string) string {
+		match := reInlineCode.FindStringSubmatch(m)
+		placeholder := "\x00IC" + strconv.Itoa(len(inlineCodeBlocks)) + "\x00"
+		inlineCodeBlocks = append(inlineCodeBlocks, "<code>"+match[1]+"</code>")
+		return placeholder
+	})
 	// Apply bold/italic only outside HTML tags so URLs in href are not corrupted
 	escaped = ApplyOutsideTags(escaped, func(seg string) string {
 		seg = reBold.ReplaceAllString(seg, "<strong>$1</strong>")
@@ -318,6 +341,10 @@ func FormatInline(s string, imageCount *int) string {
 		seg = reItalicUnderscore.ReplaceAllString(seg, "<em>$1</em>")
 		return seg
 	})
+	// Restore inline code blocks
+	for i, code := range inlineCodeBlocks {
+		escaped = strings.Replace(escaped, "\x00IC"+strconv.Itoa(i)+"\x00", code, 1)
+	}
 	return escaped
 }
 

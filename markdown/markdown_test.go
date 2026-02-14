@@ -77,6 +77,38 @@ func TestRenderMarkdownCodeBlock(t *testing.T) {
 	}
 }
 
+func TestRenderMarkdownCodeBlockWithLanguage(t *testing.T) {
+	input := "```go\nfmt.Println(\"hello\")\n```"
+	var buf bytes.Buffer
+	RenderMarkdown(&buf, input)
+	got := buf.String()
+	if !strings.Contains(got, `class="language-go"`) {
+		t.Errorf("code block should have language-go class: %q", got)
+	}
+	if !strings.Contains(got, `<span class="code-lang">go</span>`) {
+		t.Errorf("code block should have language badge: %q", got)
+	}
+	if !strings.Contains(got, `<div class="code-block-wrapper">`) {
+		t.Errorf("code block should be wrapped in div: %q", got)
+	}
+	if !strings.Contains(got, "</div>") {
+		t.Errorf("wrapper div should be closed: %q", got)
+	}
+}
+
+func TestRenderMarkdownCodeBlockWithoutLanguage(t *testing.T) {
+	input := "```\nplain code\n```"
+	var buf bytes.Buffer
+	RenderMarkdown(&buf, input)
+	got := buf.String()
+	if strings.Contains(got, "code-lang") {
+		t.Errorf("code block without language should not have badge: %q", got)
+	}
+	if strings.Contains(got, "code-block-wrapper") {
+		t.Errorf("code block without language should not have wrapper: %q", got)
+	}
+}
+
 func TestRenderMarkdownHeadings(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -145,6 +177,35 @@ func TestFormatInlineLinkNewTab(t *testing.T) {
 		if got != tt.expected {
 			t.Errorf("FormatInline(%q)\n  got:  %q\n  want: %q", tt.input, got, tt.expected)
 		}
+	}
+}
+
+func TestFormatInlineCode(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"`code`", "<code>code</code>"},
+		{"use `fmt.Println` here", "use <code>fmt.Println</code> here"},
+		{"`a` and `b`", "<code>a</code> and <code>b</code>"},
+		// bold inside backticks should not be formatted
+		{"`**not bold**`", "<code>**not bold**</code>"},
+	}
+	for _, tt := range tests {
+		got := FormatInline(tt.input, new(int))
+		if got != tt.expected {
+			t.Errorf("FormatInline(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestRenderMarkdownInlineCodeInParagraph(t *testing.T) {
+	input := "Run `go test` to verify."
+	var buf bytes.Buffer
+	RenderMarkdown(&buf, input)
+	got := buf.String()
+	if !strings.Contains(got, "<code>go test</code>") {
+		t.Errorf("RenderMarkdown(%q) = %q, want inline code tags", input, got)
 	}
 }
 
