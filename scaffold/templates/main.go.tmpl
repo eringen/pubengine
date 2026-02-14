@@ -20,6 +20,7 @@ func main() {
 			AdminPassword: pubengine.MustEnv("ADMIN_PASSWORD"),
 			SessionSecret: pubengine.MustEnv("ADMIN_SESSION_SECRET"),
 			CookieSecure:  pubengine.EnvOr("COOKIE_SECURE", "") == "true",
+			AnalyticsEnabled: true,
 		},
 		pubengine.ViewFuncs{
 			Home:             views.Home,
