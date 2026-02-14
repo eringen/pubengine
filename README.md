@@ -165,7 +165,7 @@ All configuration in one struct:
 | `Author` | `string` | `""` | Author name for JSON-LD structured data |
 | `Addr` | `string` | `":3000"` | Server listen address |
 | `DatabasePath` | `string` | `"data/blog.db"` | SQLite database path |
-| `AnalyticsEnabled` | `bool` | `true` | Enable built-in analytics |
+| `AnalyticsEnabled` | `bool` | `false` | Enable built-in analytics |
 | `AnalyticsDatabasePath` | `string` | `"data/analytics.db"` | Analytics SQLite path |
 | `AdminPassword` | `string` | **required** | Admin login password |
 | `SessionSecret` | `string` | **required** | Session cookie encryption secret |

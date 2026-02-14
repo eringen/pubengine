@@ -12,7 +12,7 @@ type SiteConfig struct {
 	Addr         string // Listen address (default ":3000")
 	DatabasePath string // SQLite path (default "data/blog.db")
 
-	AnalyticsEnabled      bool   // Enable analytics (default true)
+	AnalyticsEnabled      bool   // Enable analytics (default false; scaffold sets true)
 	AnalyticsDatabasePath string // Analytics SQLite path (default "data/analytics.db")
 
 	AdminPassword string // Required: admin login password
