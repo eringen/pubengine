@@ -1,6 +1,7 @@
 package pubengine
 
 import (
+	"crypto/subtle"
 	"database/sql"
 	"net/http"
 	"strings"
@@ -36,7 +37,7 @@ func (a *App) handleAdminLogin(c echo.Context) error {
 		return c.String(http.StatusTooManyRequests, "Too many login attempts. Try again later.")
 	}
 	pass := c.FormValue("password")
-	if pass == a.Config.AdminPassword {
+	if subtle.ConstantTimeCompare([]byte(pass), []byte(a.Config.AdminPassword)) == 1 {
 		if err := setAdminSession(c); err != nil {
 			return err
 		}
