@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -68,8 +69,8 @@ func (a *App) handleAdminSave(c echo.Context) error {
 	if slug == "" {
 		slug = Slugify(title)
 	}
-	if slug == "" {
-		return c.Redirect(http.StatusSeeOther, "/admin/?msg=Slug+is+required.+Add+a+title+or+slug.")
+	if msg := ValidateSlug(slug); msg != "" {
+		return c.Redirect(http.StatusSeeOther, "/admin/?msg="+url.QueryEscape(msg))
 	}
 	date := strings.TrimSpace(c.FormValue("date"))
 	if date == "" {

@@ -7,6 +7,34 @@ import (
 	"strings"
 )
 
+const maxSlugLength = 128
+
+// reservedSlugs are URL path segments that would collide with framework routes.
+var reservedSlugs = map[string]struct{}{
+	"admin":   {},
+	"api":     {},
+	"public":  {},
+	"blog":    {},
+	"feed":    {},
+	"sitemap": {},
+	"new":     {},
+}
+
+// ValidateSlug checks that a slug is non-empty, not reserved, and within length limits.
+// Returns an error message string, or "" if valid.
+func ValidateSlug(slug string) string {
+	if slug == "" {
+		return "Slug is required. Add a title or slug."
+	}
+	if len(slug) > maxSlugLength {
+		return "Slug is too long. Keep it under 128 characters."
+	}
+	if _, ok := reservedSlugs[slug]; ok {
+		return "Slug \"" + slug + "\" is reserved. Choose a different slug."
+	}
+	return ""
+}
+
 // Slugify converts a title to a URL-safe slug.
 func Slugify(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
