@@ -37,7 +37,8 @@ func (a *App) handleAdminPost(c echo.Context) error {
 }
 
 func (a *App) handleAdminLogin(c echo.Context) error {
-	if !a.loginLimiter.Allow(c.RealIP()) {
+	ip := c.RealIP()
+	if !a.loginLimiter.Check(ip) {
 		return c.String(http.StatusTooManyRequests, "Too many login attempts. Try again later.")
 	}
 	pass := c.FormValue("password")
@@ -47,6 +48,7 @@ func (a *App) handleAdminLogin(c echo.Context) error {
 		}
 		return c.Redirect(http.StatusSeeOther, "/admin/")
 	}
+	a.loginLimiter.Record(ip)
 	return Render(c, a.Views.AdminLogin(true, CsrfToken(c)))
 }
 

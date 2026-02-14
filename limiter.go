@@ -46,10 +46,20 @@ func (l *LoginLimiter) cleanup() {
 	}
 }
 
-// Allow returns true if the IP has not exceeded the rate limit.
+// Allow checks if the IP has not exceeded the rate limit and records the attempt.
+// Kept for backwards compatibility; prefer Check + Record for login flows.
 func (l *LoginLimiter) Allow(ip string) bool {
-	now := time.Now()
-	cutoff := now.Add(-l.window)
+	if !l.Check(ip) {
+		return false
+	}
+	l.Record(ip)
+	return true
+}
+
+// Check returns true if the IP has not exceeded the rate limit.
+// It does not record an attempt — call Record separately on failure.
+func (l *LoginLimiter) Check(ip string) bool {
+	cutoff := time.Now().Add(-l.window)
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -61,11 +71,13 @@ func (l *LoginLimiter) Allow(ip string) bool {
 			kept = append(kept, t)
 		}
 	}
-	if len(kept) >= l.max {
-		l.attempts[ip] = kept
-		return false
-	}
-	kept = append(kept, now)
 	l.attempts[ip] = kept
-	return true
+	return len(kept) < l.max
+}
+
+// Record registers a failed login attempt for the given IP.
+func (l *LoginLimiter) Record(ip string) {
+	l.mu.Lock()
+	l.attempts[ip] = append(l.attempts[ip], time.Now())
+	l.mu.Unlock()
 }
