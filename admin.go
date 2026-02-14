@@ -22,6 +22,9 @@ func (a *App) handleAdminPost(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/admin/")
 	}
 	slug := c.Param("slug")
+	if slug == "new" {
+		return Render(c, a.Views.AdminFormPartial(BlogPost{}, CsrfToken(c)))
+	}
 	post, err := a.Store.GetPostAny(slug)
 	if err != nil {
 		if err == sql.ErrNoRows {
