@@ -12,7 +12,7 @@ var ErrNotFound = sql.ErrNoRows
 
 // PostCache is an in-memory cache of published blog posts and tags with TTL.
 type PostCache struct {
-	mu      sync.Mutex
+	mu      sync.RWMutex
 	posts   []BlogPost
 	tags    []string
 	fetched time.Time
@@ -55,16 +55,31 @@ func (c *PostCache) load() error {
 	return nil
 }
 
+// ensureLoaded returns cached posts and tags after ensuring the cache is fresh.
+// It tries a read lock first; only takes a write lock if a reload is needed.
+func (c *PostCache) ensureLoaded() ([]BlogPost, []string, error) {
+	c.mu.RLock()
+	if c.valid() {
+		posts, tags := c.posts, c.tags
+		c.mu.RUnlock()
+		return posts, tags, nil
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.load(); err != nil {
+		return nil, nil, err
+	}
+	return c.posts, c.tags, nil
+}
+
 // ListPosts returns published posts, optionally filtered by tag.
 func (c *PostCache) ListPosts(tag string) ([]BlogPost, error) {
-	c.mu.Lock()
-	if err := c.load(); err != nil {
-		c.mu.Unlock()
+	posts, _, err := c.ensureLoaded()
+	if err != nil {
 		return nil, err
 	}
-	posts := c.posts
-	c.mu.Unlock()
-
 	if tag == "" {
 		return posts, nil
 	}
@@ -83,26 +98,16 @@ func (c *PostCache) ListPosts(tag string) ([]BlogPost, error) {
 
 // ListTags returns all unique tags from published posts.
 func (c *PostCache) ListTags() ([]string, error) {
-	c.mu.Lock()
-	if err := c.load(); err != nil {
-		c.mu.Unlock()
-		return nil, err
-	}
-	tags := c.tags
-	c.mu.Unlock()
-	return tags, nil
+	_, tags, err := c.ensureLoaded()
+	return tags, err
 }
 
 // GetPost returns a single published post by slug from the cache.
 func (c *PostCache) GetPost(slug string) (BlogPost, error) {
-	c.mu.Lock()
-	if err := c.load(); err != nil {
-		c.mu.Unlock()
+	posts, _, err := c.ensureLoaded()
+	if err != nil {
 		return BlogPost{}, err
 	}
-	posts := c.posts
-	c.mu.Unlock()
-
 	for _, p := range posts {
 		if p.Slug == slug {
 			return p, nil
