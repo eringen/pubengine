@@ -1,3 +1,7 @@
+# Load .env if it exists (copy .env.example to .env to get started).
+-include .env
+export
+
 TAILWINDCSS := node_modules/.bin/tailwindcss
 TAILWIND_INPUT := assets/tailwind.css
 TAILWIND_OUTPUT := public/tailwind.css
@@ -21,10 +25,10 @@ templ:
 	go mod tidy
 
 run: templ css
-	ADMIN_PASSWORD=dev-only ADMIN_SESSION_SECRET=dev-secret-change-in-prod go run .
+	go run .
 
 prod: templ css-prod
-	ADMIN_PASSWORD=dev-only ADMIN_SESSION_SECRET=dev-secret-change-in-prod go run .
+	go run .
 
 test:
 	go test ./...

@@ -118,11 +118,12 @@ func runNew(name string) error {
 	fmt.Println("Done! Next steps:")
 	fmt.Println()
 	fmt.Printf("  cd %s\n", dirName)
+	fmt.Println("  cp .env.example .env")
 	fmt.Println("  npm install")
 	fmt.Println("  make run")
 	fmt.Println()
 	fmt.Printf("Edit views/*.templ to customize your templates, then run 'make templ'.\n")
-	fmt.Printf("Set ADMIN_PASSWORD and ADMIN_SESSION_SECRET in .env for production.\n")
+	fmt.Printf("Update ADMIN_PASSWORD and ADMIN_SESSION_SECRET in .env before deploying.\n")
 	return nil
 }
 
