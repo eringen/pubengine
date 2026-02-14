@@ -24,6 +24,11 @@ func NewStore(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Enable WAL mode for concurrent read/write access and set a busy timeout
+	// so writers wait instead of returning SQLITE_BUSY immediately.
+	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
+		return nil, err
+	}
 	s := &Store{db: db}
 	if err := s.ensureSchema(); err != nil {
 		return nil, err
