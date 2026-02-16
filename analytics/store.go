@@ -25,12 +25,20 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("open analytics db: %w", err)
 	}
 
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(time.Hour)
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
 
-	if _, err := db.Exec("PRAGMA journal_mode=WAL;"); err != nil {
-		return nil, fmt.Errorf("enable WAL: %w", err)
+	// WAL mode for concurrent reads, synchronous=NORMAL avoids fsync per
+	// write (safe with WAL), busy_timeout prevents SQLITE_BUSY errors,
+	// and larger cache/mmap reduce disk I/O.
+	if _, err := db.Exec(`
+		PRAGMA journal_mode=WAL;
+		PRAGMA busy_timeout=5000;
+		PRAGMA synchronous=NORMAL;
+		PRAGMA cache_size=-8000;
+		PRAGMA mmap_size=268435456;
+	`); err != nil {
+		return nil, fmt.Errorf("enable pragmas: %w", err)
 	}
 
 	s := &Store{

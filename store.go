@@ -24,11 +24,21 @@ func NewStore(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Enable WAL mode for concurrent read/write access and set a busy timeout
-	// so writers wait instead of returning SQLITE_BUSY immediately.
-	if _, err := db.Exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
+	// Enable WAL mode for concurrent read/write access, set a busy timeout
+	// so writers wait instead of returning SQLITE_BUSY immediately, and tune
+	// performance: synchronous=NORMAL is safe with WAL and avoids an fsync
+	// per transaction; larger cache and mmap reduce disk I/O.
+	if _, err := db.Exec(`
+		PRAGMA journal_mode=WAL;
+		PRAGMA busy_timeout=5000;
+		PRAGMA synchronous=NORMAL;
+		PRAGMA cache_size=-8000;
+		PRAGMA mmap_size=268435456;
+	`); err != nil {
 		return nil, err
 	}
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(4)
 	s := &Store{db: db}
 	if err := s.ensureSchema(); err != nil {
 		return nil, err
