@@ -13,12 +13,17 @@ import (
 
 // Handler handles analytics HTTP requests.
 type Handler struct {
-	store *Store
+	store          *Store
+	collectLimiter *rateLimiter
 }
 
 // NewHandler creates a new analytics handler.
+// The collect endpoint is rate-limited to 60 requests per IP per minute.
 func NewHandler(store *Store) *Handler {
-	return &Handler{store: store}
+	return &Handler{
+		store:          store,
+		collectLimiter: newRateLimiter(60, time.Minute),
+	}
 }
 
 // CollectRequest is the expected request body for the collect endpoint.
@@ -64,6 +69,11 @@ func validateCollectRequest(req *CollectRequest) error {
 
 // Collect handles incoming analytics data from clients.
 func (h *Handler) Collect(c echo.Context) error {
+	// Rate limit by IP to prevent analytics flooding.
+	if !h.collectLimiter.allow(c.RealIP()) {
+		return c.NoContent(http.StatusTooManyRequests)
+	}
+
 	// Check for Do Not Track
 	if c.Request().Header.Get("DNT") == "1" {
 		return c.NoContent(http.StatusNoContent)
