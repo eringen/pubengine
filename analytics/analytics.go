@@ -8,46 +8,39 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 )
 
-// salt holds the per-installation random salt for IP hashing, protected by sync.Once.
-var salt struct {
-	once  sync.Once
-	value string
-}
+// saltValue holds the per-installation random salt for IP hashing.
+// Set once at startup by InitSalt; read-only after that.
+var saltValue string
 
 // InitSalt loads or generates a persistent salt for IP hashing.
 // Must be called once at startup before any requests are served.
+// Returns an error if the salt cannot be loaded or generated,
+// which should be treated as fatal (the caller already does this).
 func InitSalt(store *Store) error {
-	var initErr error
-	salt.once.Do(func() {
-		s, err := store.GetSetting("hash_salt")
-		if err != nil {
-			initErr = fmt.Errorf("read hash salt: %w", err)
-			return
+	s, err := store.GetSetting("hash_salt")
+	if err != nil {
+		return fmt.Errorf("read hash salt: %w", err)
+	}
+	if s == "" {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return fmt.Errorf("generate salt: %w", err)
 		}
-		if s == "" {
-			b := make([]byte, 32)
-			if _, err := rand.Read(b); err != nil {
-				initErr = fmt.Errorf("generate salt: %w", err)
-				return
-			}
-			s = hex.EncodeToString(b)
-			if err := store.SetSetting("hash_salt", s); err != nil {
-				initErr = fmt.Errorf("store hash salt: %w", err)
-				return
-			}
+		s = hex.EncodeToString(b)
+		if err := store.SetSetting("hash_salt", s); err != nil {
+			return fmt.Errorf("store hash salt: %w", err)
 		}
-		salt.value = s
-	})
-	return initErr
+	}
+	saltValue = s
+	return nil
 }
 
 // getSalt returns the initialized salt value.
 func getSalt() string {
-	return salt.value
+	return saltValue
 }
 
 // Visit represents a single page view.
