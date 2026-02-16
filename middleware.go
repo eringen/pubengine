@@ -38,6 +38,13 @@ func (a *App) setupMiddleware() {
 
 	e.Use(middleware.Recover())
 
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Level: 5,
+		Skipper: func(c echo.Context) bool {
+			return strings.HasPrefix(c.Request().URL.Path, "/public/")
+		},
+	}))
+
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 		XSSProtection:         "1; mode=block",
 		ContentTypeNosniff:    "nosniff",
