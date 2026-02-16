@@ -90,10 +90,15 @@ func runNew(name string) error {
 		if err != nil {
 			return fmt.Errorf("create %s: %w", outPath, err)
 		}
-		defer f.Close()
 
 		if err := tmpl.Execute(f, data); err != nil {
+			f.Close()
+			os.Remove(outPath)
 			return fmt.Errorf("execute template %s: %w", path, err)
+		}
+
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("close %s: %w", outPath, err)
 		}
 
 		fmt.Printf("  created %s\n", outPath)
