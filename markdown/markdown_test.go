@@ -85,7 +85,7 @@ func TestRenderMarkdownCodeBlockWithLanguage(t *testing.T) {
 	if !strings.Contains(got, `class="language-go"`) {
 		t.Errorf("code block should have language-go class: %q", got)
 	}
-	if !strings.Contains(got, `<span class="code-lang">go</span>`) {
+	if !strings.Contains(got, `<span class="code-lang code-lang-go">go</span>`) {
 		t.Errorf("code block should have language badge: %q", got)
 	}
 	if !strings.Contains(got, `<div class="code-block-wrapper">`) {

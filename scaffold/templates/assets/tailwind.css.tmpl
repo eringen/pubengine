@@ -2,19 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Code block language badges */
 .code-block-wrapper {
   position: relative;
 }
 
 .code-lang {
   position: absolute;
-  top: 0.25rem;
+  top: 0.5rem;
   right: 0.5rem;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #9ca3af;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
   pointer-events: none;
   user-select: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #9ca3af;
 }
+
+.code-lang-go { background: rgba(0, 173, 216, 0.15); color: #00ADD8; }
+.code-lang-js,
+.code-lang-javascript { background: rgba(247, 223, 30, 0.15); color: #F7DF1E; }
+.code-lang-ts,
+.code-lang-typescript { background: rgba(49, 120, 198, 0.2); color: #6b9edd; }
+.code-lang-python,
+.code-lang-py { background: rgba(55, 118, 171, 0.2); color: #6b9edd; }
+.code-lang-rust,
+.code-lang-rs { background: rgba(222, 165, 132, 0.15); color: #DEA584; }
+.code-lang-html { background: rgba(227, 76, 38, 0.15); color: #E34C26; }
+.code-lang-css { background: rgba(86, 61, 124, 0.2); color: #a78bdb; }
+.code-lang-bash,
+.code-lang-sh,
+.code-lang-shell { background: rgba(100, 200, 100, 0.12); color: #73C991; }
+.code-lang-sql { background: rgba(0, 116, 217, 0.15); color: #5b9bd5; }
+.code-lang-json { background: rgba(146, 131, 116, 0.15); color: #b0a898; }
+.code-lang-yaml,
+.code-lang-yml { background: rgba(203, 23, 30, 0.12); color: #e06c75; }
+.code-lang-docker,
+.code-lang-dockerfile { background: rgba(29, 99, 237, 0.15); color: #5b9bd5; }

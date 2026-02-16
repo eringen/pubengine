@@ -108,8 +108,9 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 				lang := strings.TrimSpace(line[3:])
 				if lang != "" {
 					codeLang = true
-					buf.WriteString("<div class=\"code-block-wrapper\"><span class=\"code-lang\">" + html.EscapeString(lang) + "</span>")
-					buf.WriteString("<pre class=\"code-block\"><code class=\"language-" + html.EscapeString(lang) + "\">")
+					escapedLang := html.EscapeString(lang)
+					buf.WriteString("<div class=\"code-block-wrapper\"><span class=\"code-lang code-lang-" + escapedLang + "\">" + escapedLang + "</span>")
+					buf.WriteString("<pre class=\"code-block\"><code class=\"language-" + escapedLang + "\">")
 				} else {
 					buf.WriteString("<pre class=\"code-block\"><code>")
 				}
