@@ -130,19 +130,15 @@ func IsAdmin(c echo.Context) bool {
 }
 
 func setAdminSession(c echo.Context) error {
-	sess, err := session.Get(sessionName, c)
-	if err != nil {
-		return err
-	}
+	// session.Get always returns a usable session even when the existing
+	// cookie can't be decoded (e.g. secret changed). Ignore the decode error.
+	sess, _ := session.Get(sessionName, c)
 	sess.Values["authenticated"] = true
 	return sess.Save(c.Request(), c.Response())
 }
 
 func clearAdminSession(c echo.Context) error {
-	sess, err := session.Get(sessionName, c)
-	if err != nil {
-		return err
-	}
+	sess, _ := session.Get(sessionName, c)
 	sess.Options.MaxAge = -1
 	return sess.Save(c.Request(), c.Response())
 }
