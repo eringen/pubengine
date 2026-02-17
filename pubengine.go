@@ -31,6 +31,7 @@ type ViewFuncs struct {
 	AdminLogin       func(showError bool, csrfToken string) templ.Component
 	AdminDashboard   func(posts []BlogPost, message string, csrfToken string) templ.Component
 	AdminFormPartial func(post BlogPost, csrfToken string) templ.Component
+	AdminImages      func(images []Image, csrfToken string) templ.Component
 	NotFound         func() templ.Component
 	ServerError      func() templ.Component
 }
@@ -153,6 +154,9 @@ func (a *App) setupRoutes() {
 	e.GET("/admin/post/:slug/", a.handleAdminPost)
 	e.POST("/admin/save/", a.handleAdminSave)
 	e.DELETE("/admin/post/:slug/", a.handleAdminDelete)
+	e.GET("/admin/images/", a.handleImageList)
+	e.POST("/admin/images/upload/", a.handleImageUpload)
+	e.DELETE("/admin/images/:filename/", a.handleImageDelete)
 
 	// Analytics routes
 	if a.Config.AnalyticsEnabled && a.analyticsStore != nil {

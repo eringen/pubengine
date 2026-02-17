@@ -67,12 +67,21 @@ CREATE TABLE IF NOT EXISTS posts (
 		return err
 	}
 	if _, err := s.db.Exec(`ALTER TABLE posts ADD COLUMN published INTEGER NOT NULL DEFAULT 1;`); err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
-			return nil
+		if !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+			return err
 		}
-		return err
 	}
-	return nil
+	_, err = s.db.Exec(`
+CREATE TABLE IF NOT EXISTS images (
+    filename TEXT PRIMARY KEY,
+    original_name TEXT NOT NULL,
+    width INTEGER NOT NULL,
+    height INTEGER NOT NULL,
+    size INTEGER NOT NULL,
+    uploaded_at TEXT NOT NULL
+);
+`)
+	return err
 }
 
 // ListPosts returns all published posts ordered by date descending.
@@ -232,6 +241,38 @@ func (s *Store) SavePost(p BlogPost) error {
 // DeletePost removes a post by slug.
 func (s *Store) DeletePost(slug string) error {
 	_, err := s.db.Exec(`DELETE FROM posts WHERE slug = ?`, slug)
+	return err
+}
+
+// SaveImage inserts image metadata into the database.
+func (s *Store) SaveImage(img Image) error {
+	_, err := s.db.Exec(`INSERT INTO images (filename, original_name, width, height, size, uploaded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		img.Filename, img.OriginalName, img.Width, img.Height, img.Size, img.UploadedAt)
+	return err
+}
+
+// ListImages returns all images ordered by upload time descending.
+func (s *Store) ListImages() ([]Image, error) {
+	rows, err := s.db.Query(`SELECT filename, original_name, width, height, size, uploaded_at FROM images ORDER BY uploaded_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var images []Image
+	for rows.Next() {
+		var img Image
+		if err := rows.Scan(&img.Filename, &img.OriginalName, &img.Width, &img.Height, &img.Size, &img.UploadedAt); err != nil {
+			return nil, err
+		}
+		images = append(images, img)
+	}
+	return images, rows.Err()
+}
+
+// DeleteImage removes image metadata from the database.
+func (s *Store) DeleteImage(filename string) error {
+	_, err := s.db.Exec(`DELETE FROM images WHERE filename = ?`, filename)
 	return err
 }
 

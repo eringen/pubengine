@@ -12,6 +12,16 @@ type BlogPost struct {
 	Published bool
 }
 
+// Image represents an uploaded image stored in the uploads directory.
+type Image struct {
+	Filename     string // e.g. "my-photo.jpg"
+	OriginalName string
+	Width        int
+	Height       int
+	Size         int    // bytes
+	UploadedAt   string // RFC3339
+}
+
 // PageMeta carries per-page OpenGraph and SEO metadata into the <head> template.
 type PageMeta struct {
 	Title       string

@@ -1,6 +1,8 @@
 package views
 
 import (
+	"fmt"
+
 	"github.com/eringen/pubengine"
 )
 
@@ -76,14 +78,24 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 				}
 				<div class="flex items-center justify-between mb-6">
 					<h1 class="text-2xl font-bold">Posts</h1>
-					<button
-						hx-get="/admin/post/new/"
-						hx-target="#post-form"
-						hx-swap="innerHTML"
-						class="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-200"
-					>
-						New Post
-					</button>
+					<div class="flex items-center gap-2">
+						<button
+							hx-get="/admin/images/"
+							hx-target="#post-form"
+							hx-swap="innerHTML"
+							class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+						>
+							Images
+						</button>
+						<button
+							hx-get="/admin/post/new/"
+							hx-target="#post-form"
+							hx-swap="innerHTML"
+							class="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-200"
+						>
+							New Post
+						</button>
+					</div>
 				</div>
 				<div id="post-form" class="mb-8"></div>
 				<div class="space-y-2">
@@ -223,4 +235,105 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 			</button>
 		</div>
 	</form>
+}
+
+script copyMarkdown(text string) {
+	navigator.clipboard.writeText(text)
+}
+
+// formatBytes formats a byte count as a human-readable string.
+func formatBytes(b int) string {
+	if b < 1024 {
+		return fmt.Sprintf("%d B", b)
+	}
+	kb := float64(b) / 1024
+	if kb < 1024 {
+		return fmt.Sprintf("%.1f KB", kb)
+	}
+	mb := kb / 1024
+	return fmt.Sprintf("%.1f MB", mb)
+}
+
+// AdminImages renders the image library panel loaded via HTMX.
+templ AdminImages(images []pubengine.Image, csrfToken string) {
+	<div class="space-y-6 p-4 border border-gray-200 dark:border-gray-700 rounded">
+		<div class="flex items-center justify-between">
+			<h2 class="text-lg font-bold">Image Library</h2>
+			<button
+				type="button"
+				onclick="document.getElementById('post-form').innerHTML = ''"
+				class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+			>
+				Close
+			</button>
+		</div>
+		<form
+			hx-post="/admin/images/upload/"
+			hx-target="#post-form"
+			hx-swap="innerHTML"
+			hx-encoding="multipart/form-data"
+			class="flex items-end gap-3"
+		>
+			<input type="hidden" name="_csrf" value={ csrfToken }/>
+			<div class="flex-1">
+				<label for="image" class="block text-sm font-medium mb-1">Upload Image</label>
+				<input
+					type="file"
+					name="image"
+					id="image"
+					accept="image/*"
+					required
+					class="w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-gray-100 dark:file:bg-gray-800 file:text-gray-700 dark:file:text-gray-300 hover:file:bg-gray-200 dark:hover:file:bg-gray-700"
+				/>
+			</div>
+			<button
+				type="submit"
+				class="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-200"
+			>
+				Upload
+			</button>
+		</form>
+		if len(images) > 0 {
+			<div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+				for _, img := range images {
+					<div class="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+						<img
+							src={ "/public/uploads/" + img.Filename }
+							alt={ img.Filename }
+							class="w-full h-32 object-cover bg-gray-100 dark:bg-gray-800"
+							loading="lazy"
+						/>
+						<div class="p-2 space-y-1">
+							<p class="text-xs font-medium truncate" title={ img.Filename }>{ img.Filename }</p>
+							<p class="text-xs text-gray-500 dark:text-gray-400">
+								{ fmt.Sprintf("%dx%d", img.Width, img.Height) } · { formatBytes(img.Size) }
+							</p>
+							<div class="flex items-center gap-1">
+								<button
+									type="button"
+									onclick={ copyMarkdown(fmt.Sprintf("![%s](/public/uploads/%s)", img.Filename, img.Filename)) }
+									class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+								>
+									Copy Markdown
+								</button>
+								<span class="text-gray-300 dark:text-gray-600">|</span>
+								<button
+									hx-delete={ "/admin/images/" + img.Filename + "/" }
+									hx-target="#post-form"
+									hx-swap="innerHTML"
+									hx-confirm="Delete this image?"
+									hx-headers={ "{\"X-CSRF-Token\": \"" + csrfToken + "\"}" }
+									class="text-xs text-red-600 dark:text-red-400 hover:underline"
+								>
+									Delete
+								</button>
+							</div>
+						</div>
+					</div>
+				}
+			</div>
+		} else {
+			<p class="text-gray-500 dark:text-gray-400 text-sm">No images uploaded yet.</p>
+		}
+	</div>
 }
