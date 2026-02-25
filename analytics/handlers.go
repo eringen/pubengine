@@ -168,17 +168,12 @@ type StatsResponse struct {
 func (h *Handler) GetStats(c echo.Context) error {
 	_, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 
-	now := time.Now().UTC()
-	from, to := calcTimeRange(now, days, hourly)
+	from, to := periodTimeRange(days, hourly)
 
 	stats, err := h.store.GetStats(from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get stats: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
-	}
-
-	if hourly {
-		stats.DailyViews = fillHourlyData(stats.DailyViews, from)
 	}
 
 	realtime, _ := h.store.GetRealtimeVisitors()
@@ -196,17 +191,12 @@ func (h *Handler) GetStats(c echo.Context) error {
 func (h *Handler) GetStatsFragment(c echo.Context) error {
 	_, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 
-	now := time.Now().UTC()
-	from, to := calcTimeRange(now, days, hourly)
+	from, to := periodTimeRange(days, hourly)
 
 	stats, err := h.store.GetStats(from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get stats fragment: %v", err)
 		return c.HTML(http.StatusInternalServerError, "<div class='loading'>Error loading data</div>")
-	}
-
-	if hourly {
-		stats.DailyViews = fillHourlyData(stats.DailyViews, from)
 	}
 
 	realtime, _ := h.store.GetRealtimeVisitors()
@@ -231,17 +221,12 @@ type BotStatsResponse struct {
 func (h *Handler) GetBotStats(c echo.Context) error {
 	_, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 
-	now := time.Now().UTC()
-	from, to := calcTimeRange(now, days, hourly)
+	from, to := periodTimeRange(days, hourly)
 
 	stats, err := h.store.GetBotStats(from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get bot stats: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
-	}
-
-	if hourly {
-		stats.DailyVisits = fillHourlyData(stats.DailyVisits, from)
 	}
 
 	return c.JSON(http.StatusOK, BotStatsResponse{
@@ -256,17 +241,12 @@ func (h *Handler) GetBotStats(c echo.Context) error {
 func (h *Handler) GetBotStatsFragment(c echo.Context) error {
 	_, days, hourly, monthly := parsePeriod(c.QueryParam("period"))
 
-	now := time.Now().UTC()
-	from, to := calcTimeRange(now, days, hourly)
+	from, to := periodTimeRange(days, hourly)
 
 	stats, err := h.store.GetBotStats(from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get bot stats fragment: %v", err)
 		return c.HTML(http.StatusInternalServerError, "<div class='loading'>Error loading data</div>")
-	}
-
-	if hourly {
-		stats.DailyVisits = fillHourlyData(stats.DailyVisits, from)
 	}
 
 	// Convert to view model
@@ -420,34 +400,20 @@ func convertBotStatsToViewModel(stats *BotStats) *templates.BotStatsViewModel {
 	return vm
 }
 
-// calcTimeRange returns the from/to times for the given period.
-func calcTimeRange(now time.Time, days int, hourly bool) (time.Time, time.Time) {
+// periodTimeRange computes the from/to time range for a given period.
+// For hourly (last 24 hours), it uses a rolling 24-hour window aligned to hour boundaries.
+// For other periods, it uses calendar day boundaries.
+func periodTimeRange(days int, hourly bool) (time.Time, time.Time) {
+	now := time.Now().UTC()
 	if hourly {
 		currentHour := now.Truncate(time.Hour)
 		from := currentHour.Add(-23 * time.Hour)
-		return from, now
+		to := currentHour.Add(time.Hour)
+		return from, to
 	}
 	from := now.AddDate(0, 0, -days).Truncate(24 * time.Hour)
 	to := now.Add(24 * time.Hour).Truncate(24 * time.Hour)
 	return from, to
-}
-
-// fillHourlyData ensures all 24 hourly slots are present, filling gaps with zero.
-func fillHourlyData(sparse []DailyView, from time.Time) []DailyView {
-	dataMap := make(map[string]int, len(sparse))
-	for _, v := range sparse {
-		dataMap[v.Date] = v.Views
-	}
-
-	result := make([]DailyView, 24)
-	for i := 0; i < 24; i++ {
-		hour := from.Add(time.Duration(i) * time.Hour)
-		label := fmt.Sprintf("%02d:00", hour.Hour())
-		views := dataMap[label]
-		result[i] = DailyView{Date: label, Views: views}
-	}
-
-	return result
 }
 
 // generateSessionID creates a session ID derived from visitor identity and date.
