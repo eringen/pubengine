@@ -1,6 +1,6 @@
 # Database (test artifacts)
 data/*.db
-
+testsite
 # OS
 .DS_Store
 Thumbs.db
