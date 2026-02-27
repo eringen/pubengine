@@ -56,6 +56,7 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 				<div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
 					<a href="/admin/" class="text-lg font-bold">{{.SiteName}} Admin</a>
 					<div class="flex items-center gap-4">
+						<a href="/admin/analytics/" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Analytics</a>
 						<a href="/" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">View Site</a>
 						<form method="POST" action="/admin/logout/">
 							<input type="hidden" name="_csrf" value={ csrfToken }/>
