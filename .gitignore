@@ -1,6 +1,7 @@
 # Database (test artifacts)
 data/*.db
 testsite
+pubengine
 # OS
 .DS_Store
 Thumbs.db
