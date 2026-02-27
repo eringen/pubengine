@@ -43,7 +43,7 @@ func Layout(title string, activeTab string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</title><script src=\"/public/htmx.min.js\"></script><link rel=\"stylesheet\" href=\"/public/tailwind.css\"><style>\n\t\t\t\t.stat-card { background: #fff; padding: 1.25rem; border-radius: 0.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid #f3f4f6; }\n\t\t\t\t.stat-card h3 { font-size: 0.75rem; text-transform: uppercase; color: #6b7280; margin-bottom: 0.5rem; font-weight: 500; letter-spacing: 0.05em; }\n\t\t\t\t.stat-card .value { font-size: 1.875rem; font-weight: 700; color: #1f2937; }\n\t\t\t\t.section-card { background: #fff; padding: 1.25rem; border-radius: 0.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); border: 1px solid #f3f4f6; margin-bottom: 1.25rem; }\n\t\t\t\t.section-card h2 { font-size: 0.875rem; font-weight: 600; color: #1f2937; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid #f3f4f6; text-transform: uppercase; letter-spacing: 0.05em; }\n\t\t\t\t.progress-bar { display: flex; align-items: center; gap: 0.5rem; }\n\t\t\t\t.progress-bar-fill { height: 0.5rem; background: #1f2937; border-radius: 9999px; min-width: 4px; transition: all 0.3s; }\n\t\t\t\t.chart-container { height: 12rem; position: relative; }\n\t\t\t\t.chart-bar { flex: 1; background: #3b82f6; min-height: 4px; border-radius: 2px 2px 0 0; position: relative; transition: all 0.2s; cursor: pointer; }\n\t\t\t\t.chart-bar:hover { background: #2563eb; }\n\t\t\t\t.chart-bar::after { content: attr(data-label); position: absolute; bottom: -1.25rem; left: 50%; transform: translateX(-50%); font-size: 10px; white-space: nowrap; color: #6b7280; }\n\t\t\t\t.chart-bar::before { content: attr(data-value); position: absolute; top: -1rem; left: 50%; transform: translateX(-50%); font-size: 10px; opacity: 0; transition: opacity 0.2s; }\n\t\t\t\t.chart-bar:hover::before { opacity: 1; }\n\t\t\t\t.tab-btn { padding: 0.625rem 1.25rem; font-size: 0.875rem; font-weight: 500; color: #6b7280; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s; cursor: pointer; background: none; }\n\t\t\t\t.tab-btn:hover { color: #374151; }\n\t\t\t\t.tab-btn.active { color: #111827; border-bottom-color: #111827; }\n\t\t\t\t.period-btn { padding: 0.5rem 1rem; font-size: 0.875rem; border: 1px solid #e5e7eb; background: #fff; border-radius: 0.375rem; cursor: pointer; transition: all 0.15s; }\n\t\t\t\t.period-btn:hover { background: #f9fafb; }\n\t\t\t\t.period-btn.active { background: #111827; color: #fff; border-color: #111827; }\n\t\t\t\t.period-btn.active:hover { background: #1f2937; }\n\t\t\t\t.info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.25rem; }\n\t\t\t\t.info-box h3 { font-size: 0.875rem; font-weight: 600; color: #1e40af; margin-bottom: 0.5rem; }\n\t\t\t\t.code-block { background: #111827; color: #d1d5db; padding: 1rem; border-radius: 0.5rem; font-family: monospace; font-size: 0.875rem; overflow-x: auto; margin-top: 0.5rem; }\n\t\t\t\t.code-block code { color: #4ade80; }\n\t\t\t\t.data-table { width: 100%; border-collapse: collapse; }\n\t\t\t\t.data-table th, .data-table td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #f3f4f6; }\n\t\t\t\t.data-table th { font-size: 0.75rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }\n\t\t\t\t.bot-card { background: #fffbeb; border-color: #fde68a; }\n\t\t\t\t.bot-card h3 { color: #92400e; }\n\t\t\t\t.bot-card .value { color: #78350f; }\n\t\t\t\t.realtime-value { color: #22c55e; }\n\t\t\t\t.loading-state { text-align: center; padding: 2.5rem 0; color: #6b7280; }\n\t\t\t\t.animate-fade-in { animation: fadeIn 0.3s ease-in-out; }\n\t\t\t\t@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }\n\t\t\t</style></head><body class=\"bg-gray-100 min-h-screen\"><div class=\"max-w-6xl mx-auto p-6\"><div class=\"flex items-center justify-between mb-6\"><h1 class=\"text-3xl font-bold text-gray-800\">Analytics Dashboard</h1><a href=\"/admin/\" class=\"text-sm text-gray-500 hover:text-gray-700\">&larr; Back to Admin</a></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</title><script src=\"/public/htmx.min.js\"></script><link rel=\"stylesheet\" href=\"/public/tailwind.css\"><link rel=\"stylesheet\" href=\"/public/admin.css\"></head><body class=\"bg-gray-100 min-h-screen\"><div class=\"max-w-6xl mx-auto p-6\"><div class=\"flex items-center justify-between mb-6\"><h1 class=\"text-3xl font-bold text-gray-800\">Analytics Dashboard</h1><a href=\"/admin/\" class=\"text-sm text-gray-500 hover:text-gray-700\">&larr; Back to Admin</a></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -197,7 +197,7 @@ func PeriodSelector(activePeriod string, hxGet string) templ.Component {
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(hxGet + "?period=today")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `analytics/templates/layout.templ`, Line: 108, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `analytics/templates/layout.templ`, Line: 73, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -232,7 +232,7 @@ func PeriodSelector(activePeriod string, hxGet string) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(hxGet + "?period=week")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `analytics/templates/layout.templ`, Line: 117, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `analytics/templates/layout.templ`, Line: 82, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
@@ -267,7 +267,7 @@ func PeriodSelector(activePeriod string, hxGet string) templ.Component {
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(hxGet + "?period=month")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `analytics/templates/layout.templ`, Line: 126, Col: 35}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `analytics/templates/layout.templ`, Line: 91, Col: 35}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
@@ -302,7 +302,7 @@ func PeriodSelector(activePeriod string, hxGet string) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(hxGet + "?period=year")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `analytics/templates/layout.templ`, Line: 135, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `analytics/templates/layout.templ`, Line: 100, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {

@@ -134,6 +134,7 @@ func (a *App) setupRoutes() {
 	e.GET("/public/htmx.min.js", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
 	e.GET("/public/analytics.js", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
 	e.GET("/public/dashboard.min.js", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
+	e.GET("/public/admin.css", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
 
 	// User's static assets
 	e.Static("/public", a.staticDir)
