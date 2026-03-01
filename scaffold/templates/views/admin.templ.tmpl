@@ -9,14 +9,13 @@ import (
 // AdminLogin renders the admin login form.
 templ AdminLogin(showError bool, csrfToken string) {
 	<!DOCTYPE html>
-	<html lang="en" class="bg-white dark:bg-gray-900">
-		@DarkModeScript()
+	<html lang="en" class="bg-white">
 		@Head("Admin | {{.SiteName}}")
-		<body class="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-center justify-center">
+		<body class="min-h-screen bg-white text-gray-900 flex items-center justify-center">
 			<div class="w-full max-w-sm mx-auto p-6">
 				<h1 class="text-2xl font-bold mb-6 text-center">Admin Login</h1>
 				if showError {
-					<div class="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded text-sm">
+					<div class="mb-4 p-3 bg-red-100 text-red-700 rounded text-sm">
 						Invalid password.
 					</div>
 				}
@@ -30,12 +29,12 @@ templ AdminLogin(showError bool, csrfToken string) {
 							id="password"
 							required
 							autofocus
-							class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+							class="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 						/>
 					</div>
 					<button
 						type="submit"
-						class="w-full px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded font-medium hover:bg-gray-700 dark:hover:bg-gray-200"
+						class="w-full px-4 py-2 bg-gray-900 text-white rounded font-medium hover:bg-gray-700"
 					>
 						Log In
 					</button>
@@ -48,26 +47,25 @@ templ AdminLogin(showError bool, csrfToken string) {
 // AdminDashboard renders the admin post management dashboard.
 templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken string) {
 	<!DOCTYPE html>
-	<html lang="en" class="bg-white dark:bg-gray-900">
-		@DarkModeScript()
+	<html lang="en" class="bg-white">
 		@Head("Dashboard | {{.SiteName}}")
-		<body class="min-h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-			<nav class="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+		<body class="min-h-screen bg-white text-gray-900">
+			<nav class="border-b border-gray-200 bg-white">
 				<div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
 					<a href="/admin/" class="text-lg font-bold">{{.SiteName}} Admin</a>
 					<div class="flex items-center gap-4">
-						<a href="/admin/analytics/" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Analytics</a>
-						<a href="/" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">View Site</a>
+						<a href="/admin/analytics/" class="text-sm text-gray-600 hover:text-gray-900">Analytics</a>
+						<a href="/" class="text-sm text-gray-600 hover:text-gray-900">View Site</a>
 						<form method="POST" action="/admin/logout/">
 							<input type="hidden" name="_csrf" value={ csrfToken }/>
-							<button type="submit" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Logout</button>
+							<button type="submit" class="text-sm text-gray-600 hover:text-gray-900">Logout</button>
 						</form>
 					</div>
 				</div>
 			</nav>
 			<div class="max-w-4xl mx-auto px-4 py-8">
 				if message != "" {
-					<div class="mb-4 p-3 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-sm">
+					<div class="mb-4 p-3 bg-green-100 text-green-700 rounded text-sm">
 						if message == "saved" {
 							Post saved successfully.
 						} else if message == "deleted" {
@@ -84,7 +82,7 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 							hx-get="/admin/images/"
 							hx-target="#post-form"
 							hx-swap="innerHTML"
-							class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+							class="px-4 py-2 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50"
 						>
 							Images
 						</button>
@@ -92,7 +90,7 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 							hx-get="/admin/post/new/"
 							hx-target="#post-form"
 							hx-swap="innerHTML"
-							class="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-200"
+							class="px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-700"
 						>
 							New Post
 						</button>
@@ -101,20 +99,20 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 				<div id="post-form" class="mb-8"></div>
 				<div class="space-y-2">
 					for _, post := range posts {
-						<div class="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded">
+						<div class="flex items-center justify-between p-3 border border-gray-200 rounded">
 							<div class="flex items-center gap-3">
 								if !post.Published {
-									<span class="text-xs px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded">Draft</span>
+									<span class="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">Draft</span>
 								}
 								<span class="font-medium">{ post.Title }</span>
-								<span class="text-sm text-gray-500 dark:text-gray-400">{ post.Date }</span>
+								<span class="text-sm text-gray-500">{ post.Date }</span>
 							</div>
 							<div class="flex items-center gap-2">
 								<button
 									hx-get={ "/admin/post/" + post.Slug + "/" }
 									hx-target="#post-form"
 									hx-swap="innerHTML"
-									class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+									class="text-sm text-blue-600 hover:underline"
 								>
 									Edit
 								</button>
@@ -124,7 +122,7 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 									hx-swap="outerHTML"
 									hx-confirm="Delete this post?"
 									hx-headers={ "{\"X-CSRF-Token\": \"" + csrfToken + "\"}" }
-									class="text-sm text-red-600 dark:text-red-400 hover:underline"
+									class="text-sm text-red-600 hover:underline"
 								>
 									Delete
 								</button>
@@ -132,7 +130,7 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 						</div>
 					}
 					if len(posts) == 0 {
-						<p class="text-gray-500 dark:text-gray-400">No posts yet. Create your first post!</p>
+						<p class="text-gray-500">No posts yet. Create your first post!</p>
 					}
 				</div>
 			</div>
@@ -142,7 +140,7 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 
 // AdminFormPartial renders the post edit/create form loaded via HTMX.
 templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
-	<form method="POST" action="/admin/save/" class="space-y-4 p-4 border border-gray-200 dark:border-gray-700 rounded">
+	<form method="POST" action="/admin/save/" class="space-y-4 p-4 border border-gray-200 rounded">
 		<input type="hidden" name="_csrf" value={ csrfToken }/>
 		<div class="grid grid-cols-2 gap-4">
 			<div>
@@ -152,7 +150,7 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 					name="title"
 					id="title"
 					value={ post.Title }
-					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					class="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 				/>
 			</div>
 			<div>
@@ -162,7 +160,7 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 					name="slug"
 					id="slug"
 					value={ post.Slug }
-					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					class="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 				/>
 			</div>
 		</div>
@@ -174,7 +172,7 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 					name="date"
 					id="date"
 					value={ post.Date }
-					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					class="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 				/>
 			</div>
 			<div>
@@ -184,7 +182,7 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 					name="tags"
 					id="tags"
 					value={ pubengine.JoinTags(post.Tags) }
-					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					class="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 				/>
 			</div>
 		</div>
@@ -195,7 +193,7 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 				name="summary"
 				id="summary"
 				value={ post.Summary }
-				class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+				class="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 			/>
 		</div>
 		<div>
@@ -204,7 +202,7 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 				name="content"
 				id="content"
 				rows="12"
-				class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+				class="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
 			>{ post.Content }</textarea>
 		</div>
 		<div class="flex items-center gap-4">
@@ -215,7 +213,7 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 					if post.Published {
 						checked
 					}
-					class="rounded border-gray-300 dark:border-gray-600"
+					class="rounded border-gray-300"
 				/>
 				<span class="text-sm">Published</span>
 			</label>
@@ -223,14 +221,14 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 		<div class="flex items-center gap-2">
 			<button
 				type="submit"
-				class="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-200"
+				class="px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-700"
 			>
 				Save
 			</button>
 			<button
 				type="button"
 				onclick="document.getElementById('post-form').innerHTML = ''"
-				class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+				class="px-4 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50"
 			>
 				Cancel
 			</button>
@@ -257,13 +255,13 @@ func formatBytes(b int) string {
 
 // AdminImages renders the image library panel loaded via HTMX.
 templ AdminImages(images []pubengine.Image, csrfToken string) {
-	<div class="space-y-6 p-4 border border-gray-200 dark:border-gray-700 rounded">
+	<div class="space-y-6 p-4 border border-gray-200 rounded">
 		<div class="flex items-center justify-between">
 			<h2 class="text-lg font-bold">Image Library</h2>
 			<button
 				type="button"
 				onclick="document.getElementById('post-form').innerHTML = ''"
-				class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+				class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50"
 			>
 				Close
 			</button>
@@ -284,12 +282,12 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 					id="image"
 					accept="image/*"
 					required
-					class="w-full text-sm text-gray-600 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-gray-100 dark:file:bg-gray-800 file:text-gray-700 dark:file:text-gray-300 hover:file:bg-gray-200 dark:hover:file:bg-gray-700"
+					class="w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200"
 				/>
 			</div>
 			<button
 				type="submit"
-				class="px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded text-sm font-medium hover:bg-gray-700 dark:hover:bg-gray-200"
+				class="px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-700"
 			>
 				Upload
 			</button>
@@ -297,34 +295,34 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 		if len(images) > 0 {
 			<div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
 				for _, img := range images {
-					<div class="border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+					<div class="border border-gray-200 rounded overflow-hidden">
 						<img
 							src={ "/public/uploads/" + img.Filename }
 							alt={ img.Filename }
-							class="w-full h-32 object-cover bg-gray-100 dark:bg-gray-800"
+							class="w-full h-32 object-cover bg-gray-100"
 							loading="lazy"
 						/>
 						<div class="p-2 space-y-1">
 							<p class="text-xs font-medium truncate" title={ img.Filename }>{ img.Filename }</p>
-							<p class="text-xs text-gray-500 dark:text-gray-400">
+							<p class="text-xs text-gray-500">
 								{ fmt.Sprintf("%dx%d", img.Width, img.Height) } · { formatBytes(img.Size) }
 							</p>
 							<div class="flex items-center gap-1">
 								<button
 									type="button"
 									onclick={ copyMarkdown(fmt.Sprintf("![%s](/public/uploads/%s)", img.Filename, img.Filename)) }
-									class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+									class="text-xs text-blue-600 hover:underline"
 								>
 									Copy Markdown
 								</button>
-								<span class="text-gray-300 dark:text-gray-600">|</span>
+								<span class="text-gray-300">|</span>
 								<button
 									hx-delete={ "/admin/images/" + img.Filename + "/" }
 									hx-target="#post-form"
 									hx-swap="innerHTML"
 									hx-confirm="Delete this image?"
 									hx-headers={ "{\"X-CSRF-Token\": \"" + csrfToken + "\"}" }
-									class="text-xs text-red-600 dark:text-red-400 hover:underline"
+									class="text-xs text-red-600 hover:underline"
 								>
 									Delete
 								</button>
@@ -334,7 +332,7 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 				}
 			</div>
 		} else {
-			<p class="text-gray-500 dark:text-gray-400 text-sm">No images uploaded yet.</p>
+			<p class="text-gray-500 text-sm">No images uploaded yet.</p>
 		}
 	</div>
 }

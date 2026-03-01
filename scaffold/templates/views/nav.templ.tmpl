@@ -44,20 +44,14 @@ templ HeadWithMeta(meta pubengine.PageMeta, siteName string) {
 
 // Nav renders the site navigation bar.
 templ Nav(siteName string) {
-	<nav class="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+	<nav class="border-b border-gray-200 bg-white">
 		<div class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
-			<a href="/" class="text-lg font-bold text-gray-900 dark:text-white hover:text-gray-600 dark:hover:text-gray-300">
+			<a href="/" class="text-lg font-bold text-gray-900 hover:text-gray-600">
 				{ siteName }
 			</a>
 			<div class="flex items-center gap-4">
-				<a href="/" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">Blog</a>
-				<a href="/feed.xml" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">RSS</a>
-				<button
-					onclick="document.documentElement.classList.toggle('dark'); localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light')"
-					class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-				>
-					Toggle Dark
-				</button>
+				<a href="/" class="text-sm text-gray-600 hover:text-gray-900">Blog</a>
+				<a href="/feed.xml" class="text-sm text-gray-600 hover:text-gray-900">RSS</a>
 			</div>
 		</div>
 	</nav>
@@ -65,9 +59,9 @@ templ Nav(siteName string) {
 
 // Footer renders the site footer.
 templ Footer(siteName string) {
-	<footer class="border-t border-gray-200 dark:border-gray-700 mt-16 py-8">
-		<div class="max-w-3xl mx-auto px-4 text-center text-sm text-gray-500 dark:text-gray-400">
-			<p>Powered by <a href="https://github.com/eringen/pubengine" class="underline hover:text-gray-700 dark:hover:text-gray-300">pubengine</a></p>
+	<footer class="border-t border-gray-200 mt-16 py-8">
+		<div class="max-w-3xl mx-auto px-4 text-center text-sm text-gray-500">
+			<p>Powered by <a href="https://github.com/eringen/pubengine" class="underline hover:text-gray-700">pubengine</a></p>
 		</div>
 	</footer>
 }
@@ -79,11 +73,3 @@ templ JsonLD(data string) {
 	</script>
 }
 
-// DarkModeScript renders the inline script that restores the user's theme preference.
-templ DarkModeScript() {
-	<script>
-		if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-			document.documentElement.classList.add('dark');
-		}
-	</script>
-}

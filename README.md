@@ -50,7 +50,7 @@ myblog/
 │   ├── home.templ        # Home page with blog listing
 │   ├── post.templ        # Single post with related posts
 │   ├── admin.templ       # Admin login + dashboard + editor
-│   ├── nav.templ         # Head, Nav, Footer, dark mode
+│   ├── nav.templ         # Head, Nav, Footer
 │   ├── notfound.templ    # 404 page
 │   ├── servererror.templ # 500 page
 │   └── helpers.go        # Type aliases for BlogPost, PageMeta
