@@ -20,6 +20,9 @@ func main() {
 			AdminPassword: pubengine.MustEnv("ADMIN_PASSWORD"),
 			SessionSecret: pubengine.MustEnv("ADMIN_SESSION_SECRET"),
 			CookieSecure:  pubengine.EnvOr("COOKIE_SECURE", "") == "true",
+			GoogleClientID:     pubengine.EnvOr("GOOGLE_CLIENT_ID", ""),
+			GoogleClientSecret: pubengine.EnvOr("GOOGLE_CLIENT_SECRET", ""),
+			GoogleAdminEmail:   pubengine.EnvOr("GOOGLE_ADMIN_EMAIL", ""),
 			AnalyticsEnabled: true,
 		},
 		pubengine.ViewFuncs{

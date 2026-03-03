@@ -19,7 +19,16 @@ type SiteConfig struct {
 	SessionSecret string // Required: session encryption secret
 	CookieSecure  bool   // Set true for HTTPS
 
+	GoogleClientID     string // Google OAuth client ID (optional)
+	GoogleClientSecret string // Google OAuth client secret (optional)
+	GoogleAdminEmail   string // Allowed Google email for admin login (optional)
+
 	PostCacheTTL time.Duration // Post cache TTL (default 5min)
+}
+
+// GoogleAuthEnabled returns true when all three Google OAuth fields are configured.
+func (c *SiteConfig) GoogleAuthEnabled() bool {
+	return c.GoogleClientID != "" && c.GoogleClientSecret != "" && c.GoogleAdminEmail != ""
 }
 
 func (c *SiteConfig) setDefaults() {

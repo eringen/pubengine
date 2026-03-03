@@ -144,7 +144,7 @@ type ViewFuncs struct {
     PostPartial      func(post BlogPost, posts []BlogPost, siteURL string) templ.Component
 
     // Admin pages
-    AdminLogin       func(showError bool, csrfToken string) templ.Component
+    AdminLogin       func(showError bool, csrfToken string, googleLoginURL string) templ.Component
     AdminDashboard   func(posts []BlogPost, message string, csrfToken string) templ.Component
     AdminFormPartial func(post BlogPost, csrfToken string) templ.Component
     AdminImages      func(images []Image, csrfToken string) templ.Component
@@ -174,6 +174,9 @@ All configuration in one struct:
 | `AdminPassword` | `string` | **required** | Admin login password |
 | `SessionSecret` | `string` | **required** | Session cookie encryption secret |
 | `CookieSecure` | `bool` | `false` | Set `true` when behind HTTPS |
+| `GoogleClientID` | `string` | `""` | Google OAuth client ID (optional) |
+| `GoogleClientSecret` | `string` | `""` | Google OAuth client secret (optional) |
+| `GoogleAdminEmail` | `string` | `""` | Allowed Google email for admin login (optional) |
 | `PostCacheTTL` | `time.Duration` | `5m` | In memory post cache TTL |
 
 ### Options
@@ -402,6 +405,35 @@ The dashboard is fully self contained. Its CSS (`admin.css`) and JS (`dashboard.
 
 The analytics collect endpoint is rate limited to 60 requests per IP per minute to prevent flooding.
 
+## Google OAuth login
+
+pubengine supports an optional Google OAuth login for the admin panel. When configured, a "Sign in with Google" button appears on the login page alongside the password form. Password login always remains available as a fallback.
+
+### Setup
+
+1. Create OAuth credentials in the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Set the authorized redirect URI to `https://yourdomain.com/admin/auth/google/callback`
+3. Set the environment variables:
+
+```bash
+GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+GOOGLE_ADMIN_EMAIL=you@gmail.com
+```
+
+Or in your `SiteConfig`:
+
+```go
+pubengine.SiteConfig{
+    GoogleClientID:     pubengine.EnvOr("GOOGLE_CLIENT_ID", ""),
+    GoogleClientSecret: pubengine.EnvOr("GOOGLE_CLIENT_SECRET", ""),
+    GoogleAdminEmail:   pubengine.EnvOr("GOOGLE_ADMIN_EMAIL", ""),
+    // ...
+}
+```
+
+All three fields must be set for Google login to be enabled. Only the email matching `GOOGLE_ADMIN_EMAIL` (case-insensitive) is allowed to log in.
+
 ## Middleware
 
 pubengine configures a production ready middleware stack:
@@ -610,6 +642,9 @@ npm run build        # Build both CSS and JS
 | `SITE_DESCRIPTION` | no | `""` | Description for RSS and meta tags |
 | `SITE_AUTHOR` | no | `""` | Author name for JSON-LD |
 | `COOKIE_SECURE` | no | `false` | Set `true` behind HTTPS |
+| `GOOGLE_CLIENT_ID` | no | `""` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | no | `""` | Google OAuth client secret |
+| `GOOGLE_ADMIN_EMAIL` | no | `""` | Allowed Google email for admin login |
 | `DATABASE_PATH` | no | `data/blog.db` | Blog SQLite path |
 | `ANALYTICS_DATABASE_PATH` | no | `data/analytics.db` | Analytics SQLite path |
 | `ADDR` | no | `:3000` | Server listen address |

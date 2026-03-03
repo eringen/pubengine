@@ -13,7 +13,8 @@ import (
 
 func (a *App) handleAdmin(c echo.Context) error {
 	if !IsAdmin(c) {
-		return Render(c, a.Views.AdminLogin(false, CsrfToken(c)))
+		showError := c.QueryParam("error") != ""
+		return Render(c, a.Views.AdminLogin(showError, CsrfToken(c), a.googleLoginURL()))
 	}
 	return a.renderAdminDashboard(c, c.QueryParam("msg"))
 }
@@ -49,7 +50,14 @@ func (a *App) handleAdminLogin(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/admin/")
 	}
 	a.loginLimiter.Record(ip)
-	return Render(c, a.Views.AdminLogin(true, CsrfToken(c)))
+	return Render(c, a.Views.AdminLogin(true, CsrfToken(c), a.googleLoginURL()))
+}
+
+func (a *App) googleLoginURL() string {
+	if a.Config.GoogleAuthEnabled() {
+		return "/admin/auth/google/"
+	}
+	return ""
 }
 
 func handleAdminLogout(c echo.Context) error {

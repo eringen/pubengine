@@ -28,7 +28,7 @@ type ViewFuncs struct {
 	BlogSection      func(posts []BlogPost, activeTag string, tags []string) templ.Component
 	Post             func(post BlogPost, posts []BlogPost, siteURL string) templ.Component
 	PostPartial      func(post BlogPost, posts []BlogPost, siteURL string) templ.Component
-	AdminLogin       func(showError bool, csrfToken string) templ.Component
+	AdminLogin       func(showError bool, csrfToken string, googleLoginURL string) templ.Component
 	AdminDashboard   func(posts []BlogPost, message string, csrfToken string) templ.Component
 	AdminFormPartial func(post BlogPost, csrfToken string) templ.Component
 	AdminImages      func(images []Image, csrfToken string) templ.Component
@@ -158,6 +158,12 @@ func (a *App) setupRoutes() {
 	e.GET("/admin/images/", a.handleImageList)
 	e.POST("/admin/images/upload/", a.handleImageUpload)
 	e.DELETE("/admin/images/:filename/", a.handleImageDelete)
+
+	// Google OAuth routes
+	if a.Config.GoogleAuthEnabled() {
+		e.GET("/admin/auth/google/", a.handleGoogleLogin)
+		e.GET("/admin/auth/google/callback", a.handleGoogleCallback)
+	}
 
 	// Analytics routes
 	if a.Config.AnalyticsEnabled && a.analyticsStore != nil {

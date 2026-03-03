@@ -67,7 +67,9 @@ func (a *App) setupMiddleware() {
 		}(),
 		CookieSecure: a.Config.CookieSecure,
 		Skipper: func(c echo.Context) bool {
-			return strings.HasPrefix(c.Request().URL.Path, "/api/analytics/")
+			path := c.Request().URL.Path
+			return strings.HasPrefix(path, "/api/analytics/") ||
+				path == "/admin/auth/google/callback"
 		},
 		ErrorHandler: func(err error, c echo.Context) error {
 			return c.String(http.StatusForbidden, "Forbidden")
@@ -83,6 +85,7 @@ func (a *App) setupMiddleware() {
 				strings.HasPrefix(path, "/api/") ||
 				strings.HasPrefix(path, "/admin/analytics/api/") ||
 				strings.HasPrefix(path, "/admin/analytics/fragments/") ||
+				path == "/admin/auth/google/callback" ||
 				path == "/sitemap.xml" || path == "/feed.xml" || path == "/robots.txt"
 		},
 	}))
