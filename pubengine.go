@@ -28,7 +28,7 @@ type ViewFuncs struct {
 	BlogSection      func(posts []BlogPost, activeTag string, tags []string) templ.Component
 	Post             func(post BlogPost, posts []BlogPost, siteURL string) templ.Component
 	PostPartial      func(post BlogPost, posts []BlogPost, siteURL string) templ.Component
-	AdminLogin       func(showError bool, csrfToken string, googleLoginURL string) templ.Component
+	AdminLogin       func(errorMsg string, csrfToken string, googleLoginURL string) templ.Component
 	AdminDashboard   func(posts []BlogPost, message string, csrfToken string) templ.Component
 	AdminFormPartial func(post BlogPost, csrfToken string) templ.Component
 	AdminImages      func(images []Image, csrfToken string) templ.Component

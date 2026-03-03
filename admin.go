@@ -13,8 +13,14 @@ import (
 
 func (a *App) handleAdmin(c echo.Context) error {
 	if !IsAdmin(c) {
-		showError := c.QueryParam("error") != ""
-		return Render(c, a.Views.AdminLogin(showError, CsrfToken(c), a.googleLoginURL()))
+		errorMsg := ""
+		switch c.QueryParam("error") {
+		case "unauthorized_email":
+			errorMsg = "Unauthorized Google account."
+		case "invalid_state", "oauth_failed":
+			errorMsg = "Google login failed. Please try again."
+		}
+		return Render(c, a.Views.AdminLogin(errorMsg, CsrfToken(c), a.googleLoginURL()))
 	}
 	return a.renderAdminDashboard(c, c.QueryParam("msg"))
 }
@@ -50,7 +56,7 @@ func (a *App) handleAdminLogin(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/admin/")
 	}
 	a.loginLimiter.Record(ip)
-	return Render(c, a.Views.AdminLogin(true, CsrfToken(c), a.googleLoginURL()))
+	return Render(c, a.Views.AdminLogin("Invalid password.", CsrfToken(c), a.googleLoginURL()))
 }
 
 func (a *App) googleLoginURL() string {
