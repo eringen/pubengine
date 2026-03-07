@@ -693,4 +693,4 @@ The binary embeds talkDOM, the analytics script, the analytics dashboard JS, and
 
 ## License
 
-MIT
+MIT [MIT](LICENSE)
