@@ -2,7 +2,7 @@
 
 A Go blog publishing framework. Ships blog CRUD, admin dashboard, privacy-first analytics, RSS, and sitemap out of the box. You own the templates, pubengine handles everything else.
 
-Built with [Echo](https://echo.labstack.com/), [templ](https://templ.guide/), [HTMX](https://htmx.org/), [Tailwind CSS](https://tailwindcss.com/), and [SQLite](https://sqlite.org/).
+Built with [Echo](https://echo.labstack.com/), [templ](https://templ.guide/), [talkDOM](https://github.com/eringen/talkdom), [Tailwind CSS](https://tailwindcss.com/), and [SQLite](https://sqlite.org/).
 
 ## How it works
 
@@ -138,7 +138,7 @@ type ViewFuncs struct {
     Home             func(posts []BlogPost, activeTag string, tags []string, siteURL string) templ.Component
     Post             func(post BlogPost, posts []BlogPost, siteURL string) templ.Component
 
-    // HTMX partial renders (SPA like navigation)
+    // talkDOM partial renders (SPA like navigation)
     HomePartial      func(posts []BlogPost, activeTag string, tags []string, siteURL string) templ.Component
     BlogSection      func(posts []BlogPost, activeTag string, tags []string) templ.Component
     PostPartial      func(post BlogPost, posts []BlogPost, siteURL string) templ.Component
@@ -155,7 +155,7 @@ type ViewFuncs struct {
 }
 ```
 
-The framework handles when to call full vs. partial renders based on HTMX headers automatically.
+The framework handles when to call full vs. partial renders based on talkDOM headers automatically.
 
 ### SiteConfig
 
@@ -259,10 +259,10 @@ pubengine registers these routes automatically:
 | `GET` | `/admin/` | Login page or dashboard |
 | `POST` | `/admin/login/` | Process login |
 | `POST` | `/admin/logout/` | Logout |
-| `GET` | `/admin/post/:slug/` | Edit post form (HTMX) |
+| `GET` | `/admin/post/:slug/` | Edit post form (talkDOM) |
 | `POST` | `/admin/save/` | Create or update post |
 | `DELETE` | `/admin/post/:slug/` | Delete post |
-| `GET` | `/admin/images/` | Image library (HTMX) |
+| `GET` | `/admin/images/` | Image library (talkDOM) |
 | `POST` | `/admin/images/upload/` | Upload image |
 | `DELETE` | `/admin/images/:filename/` | Delete image |
 
@@ -384,7 +384,7 @@ The framework ships `analytics.js` as an embedded asset, automatically served at
 <script src="/public/analytics.js" defer></script>
 ```
 
-The script tracks page views, time on page, and handles HTMX navigation. It uses `navigator.sendBeacon` for reliable unload tracking.
+The script tracks page views, time on page, and handles talkDOM navigation. It uses `navigator.sendBeacon` for reliable unload tracking.
 
 ### Dashboard
 
@@ -399,7 +399,7 @@ The analytics dashboard is available at `/admin/analytics/` (requires admin logi
 - Daily/hourly/monthly view charts
 - Bot traffic (separate tab with independent period selection)
 
-The dashboard is fully self contained. Its CSS (`admin.css`) and JS (`dashboard.min.js`) are embedded in the binary alongside `htmx.min.js`.
+The dashboard is fully self contained. Its CSS (`admin.css`) and JS (`dashboard.min.js`) are embedded in the binary alongside `talkdom.js`.
 
 ### Rate limiting
 
@@ -559,7 +559,7 @@ pubengine/
 ├── sitemap.go             # Sitemap XML generation
 ├── embed.go               # Embedded static assets
 ├── embedded/
-│   ├── htmx.min.js        # HTMX library
+│   ├── talkdom.js          # talkDOM library
 │   ├── analytics.js       # Client side tracking script
 │   ├── dashboard.min.js   # Analytics dashboard JS
 │   └── admin.css          # Analytics dashboard styles
@@ -659,7 +659,7 @@ npm run build        # Build both CSS and JS
 | [gorilla/sessions](https://github.com/gorilla/sessions) | v1.2.2 | Cookie session management |
 | [echo-contrib](https://github.com/labstack/echo-contrib) | v0.17.1 | Echo session middleware |
 
-No JavaScript framework dependencies. HTMX and the analytics script are embedded in the binary.
+No JavaScript framework dependencies. talkDOM and the analytics script are embedded in the binary.
 
 ## Testing
 
@@ -689,7 +689,7 @@ GOOS=linux GOARCH=amd64 go build -o mysite .
 # Needs: public/ directory, data/ directory (auto created), env vars set
 ```
 
-The binary embeds HTMX, the analytics script, the analytics dashboard JS, and the admin CSS. User assets (CSS, JS, fonts, images) live in the `public/` directory alongside the binary.
+The binary embeds talkDOM, the analytics script, the analytics dashboard JS, and the admin CSS. User assets (CSS, JS, fonts, images) live in the `public/` directory alongside the binary.
 
 ## License
 

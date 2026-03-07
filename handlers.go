@@ -17,14 +17,12 @@ func (a *App) handleHome(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	if c.Request().Header.Get("HX-Request") == "true" {
-		partial := c.QueryParam("partial")
-		switch partial {
-		case "blog":
-			return Render(c, a.Views.BlogSection(posts, tag, tags))
-		case "home":
-			return Render(c, a.Views.HomePartial(posts, tag, tags, a.Config.URL))
-		}
+	partial := c.QueryParam("partial")
+	switch partial {
+	case "blog":
+		return Render(c, a.Views.BlogSection(posts, tag, tags))
+	case "home":
+		return Render(c, a.Views.HomePartial(posts, tag, tags, a.Config.URL))
 	}
 	return Render(c, a.Views.Home(posts, tag, tags, a.Config.URL))
 }
@@ -42,7 +40,7 @@ func (a *App) handlePost(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	if c.Request().Header.Get("HX-Request") == "true" && c.QueryParam("partial") == "post" {
+	if c.QueryParam("partial") == "post" {
 		return Render(c, a.Views.PostPartial(post, posts, a.Config.URL))
 	}
 	return Render(c, a.Views.Post(post, posts, a.Config.URL))

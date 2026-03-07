@@ -17,7 +17,7 @@ templ Post(post pubengine.BlogPost, posts []pubengine.BlogPost, siteURL string) 
 		}, "{{.SiteName}}")
 		<body class="min-h-screen bg-white text-gray-900">
 			@Nav("{{.SiteName}}")
-			<main id="content" class="max-w-3xl mx-auto px-4 py-8">
+			<main id="content" receiver="content" class="max-w-3xl mx-auto px-4 py-8">
 				@postContent(post, posts)
 			</main>
 			@Footer("{{.SiteName}}")
@@ -26,10 +26,10 @@ templ Post(post pubengine.BlogPost, posts []pubengine.BlogPost, siteURL string) 
 	</html>
 }
 
-// PostPartial renders the post content for HTMX partial updates.
+// PostPartial renders the post content for talkDOM partial updates.
 templ PostPartial(post pubengine.BlogPost, posts []pubengine.BlogPost, siteURL string) {
 	<title>{ post.Title } | {{.SiteName}}</title>
-	<main id="content" class="max-w-3xl mx-auto px-4 py-8">
+	<main id="content" receiver="content" class="max-w-3xl mx-auto px-4 py-8">
 		@postContent(post, posts)
 	</main>
 }
@@ -64,10 +64,8 @@ templ postContent(post pubengine.BlogPost, posts []pubengine.BlogPost) {
 				for _, rp := range related {
 					<a
 						href={ templ.SafeURL(rp.Link + "/") }
-						hx-get={ rp.Link + "/?partial=post" }
-						hx-target="#content"
-						hx-swap="outerHTML"
-						hx-push-url={ rp.Link + "/" }
+						sender={ "content get: " + rp.Link + "/?partial=post apply: outer" }
+						push-url={ rp.Link + "/" }
 						class="block hover:text-blue-600"
 					>
 						<h3 class="font-medium">{ rp.Title }</h3>

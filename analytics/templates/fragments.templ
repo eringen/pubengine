@@ -4,13 +4,13 @@ import "fmt"
 
 // PeriodSelectorWithStats renders the period selector with visitor stats content
 templ PeriodSelectorWithStats(period string, stats *StatsViewModel, realtime int, days int, hourly bool, monthly bool) {
-	@PeriodSelector(period, "/admin/analytics/fragments/stats")
+	@PeriodSelector(period)
 	@StatsFragment(stats, realtime, days, hourly, monthly)
 }
 
 // PeriodSelectorWithBotStats renders the period selector with bot stats content
 templ PeriodSelectorWithBotStats(period string, stats *BotStatsViewModel, days int, hourly bool, monthly bool) {
-	@PeriodSelector(period, "/admin/analytics/fragments/bot-stats")
+	@PeriodSelector(period)
 	@BotStatsFragment(stats, days, hourly, monthly)
 }
 
@@ -36,12 +36,12 @@ templ BotStatsFragment(stats *BotStatsViewModel, periodDays int, hourly bool, mo
 	@BotTopPagesSection(stats.TopPages)
 }
 
-// StatsFragmentOnly renders only the stats content without period selector (for htmx updates)
+// StatsFragmentOnly renders only the stats content without period selector (for talkdom updates)
 templ StatsFragmentOnly(stats *StatsViewModel, realtime int, days int, hourly bool, monthly bool) {
 	@StatsFragment(stats, realtime, days, hourly, monthly)
 }
 
-// BotStatsFragmentOnly renders only the bot stats content without period selector (for htmx updates)
+// BotStatsFragmentOnly renders only the bot stats content without period selector (for talkdom updates)
 templ BotStatsFragmentOnly(stats *BotStatsViewModel, days int, hourly bool, monthly bool) {
 	@BotStatsFragment(stats, days, hourly, monthly)
 }
@@ -113,8 +113,8 @@ templ Chart(data []DailyViewViewModel) {
 templ ChartBar(item DailyViewViewModel, maxViews int) {
 	{{ height := calculateHeight(item.Views, maxViews) }}
 	{{ label := formatChartLabel(item.Date) }}
-	<div 
-		class="chart-bar" 
+	<div
+		class="chart-bar"
 		style={ fmt.Sprintf("height:%d%%", height) }
 		data-label={ label }
 		data-value={ fmt.Sprintf("%d", item.Views) }
@@ -242,13 +242,13 @@ templ Bar(label string, value int, max int) {
 // SetupFragment renders the setup tab content
 templ SetupFragment(origin string) {
 	<div class="info-box">
-		<h3>📋 Quick Setup</h3>
+		<h3>Quick Setup</h3>
 		<p class="text-sm text-blue-700">Add this single line to your HTML <code class="bg-blue-100 px-1 rounded">&lt;head&gt;</code> or before the closing <code class="bg-blue-100 px-1 rounded">&lt;/body&gt;</code> tag:</p>
 		<div class="code-block">
 			<code>&lt;script src="{ origin }/nanolytica.js"&gt;&lt;/script&gt;</code>
 		</div>
 	</div>
-	
+
 	<div class="section-card">
 		<h2>Features</h2>
 		<table class="data-table">
@@ -262,7 +262,7 @@ templ SetupFragment(origin string) {
 			</tbody>
 		</table>
 	</div>
-	
+
 	<div class="section-card">
 		<h2>API Endpoints</h2>
 		<table class="data-table">

@@ -127,11 +127,11 @@ func (a *App) Start() error {
 func (a *App) setupRoutes() {
 	e := a.Echo
 
-	// Serve embedded framework assets (htmx.min.js, analytics.js, dashboard.min.js)
+	// Serve embedded framework assets (talkdom.js, analytics.js, dashboard.min.js)
 	// These are served under /public/ and fall through to the user's static dir.
 	embeddedFS, _ := fs.Sub(EmbeddedAssets, "embedded")
 	embeddedHandler := http.FileServer(http.FS(embeddedFS))
-	e.GET("/public/htmx.min.js", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
+	e.GET("/public/talkdom.js", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
 	e.GET("/public/analytics.js", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
 	e.GET("/public/dashboard.min.js", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
 	e.GET("/public/admin.css", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))

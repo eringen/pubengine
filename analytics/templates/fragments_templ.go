@@ -32,7 +32,7 @@ func PeriodSelectorWithStats(period string, stats *StatsViewModel, realtime int,
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = PeriodSelector(period, "/admin/analytics/fragments/stats").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = PeriodSelector(period).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -66,7 +66,7 @@ func PeriodSelectorWithBotStats(period string, stats *BotStatsViewModel, days in
 			templ_7745c5c3_Var2 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = PeriodSelector(period, "/admin/analytics/fragments/bot-stats").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = PeriodSelector(period).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -196,7 +196,7 @@ func BotStatsFragment(stats *BotStatsViewModel, periodDays int, hourly bool, mon
 	})
 }
 
-// StatsFragmentOnly renders only the stats content without period selector (for htmx updates)
+// StatsFragmentOnly renders only the stats content without period selector (for talkdom updates)
 func StatsFragmentOnly(stats *StatsViewModel, realtime int, days int, hourly bool, monthly bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -226,7 +226,7 @@ func StatsFragmentOnly(stats *StatsViewModel, realtime int, days int, hourly boo
 	})
 }
 
-// BotStatsFragmentOnly renders only the bot stats content without period selector (for htmx updates)
+// BotStatsFragmentOnly renders only the bot stats content without period selector (for talkdom updates)
 func BotStatsFragmentOnly(stats *BotStatsViewModel, days int, hourly bool, monthly bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -1127,7 +1127,7 @@ func SetupFragment(origin string) templ.Component {
 			templ_7745c5c3_Var43 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<div class=\"info-box\"><h3>📋 Quick Setup</h3><p class=\"text-sm text-blue-700\">Add this single line to your HTML <code class=\"bg-blue-100 px-1 rounded\">&lt;head&gt;</code> or before the closing <code class=\"bg-blue-100 px-1 rounded\">&lt;/body&gt;</code> tag:</p><div class=\"code-block\"><code>&lt;script src=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<div class=\"info-box\"><h3>Quick Setup</h3><p class=\"text-sm text-blue-700\">Add this single line to your HTML <code class=\"bg-blue-100 px-1 rounded\">&lt;head&gt;</code> or before the closing <code class=\"bg-blue-100 px-1 rounded\">&lt;/body&gt;</code> tag:</p><div class=\"code-block\"><code>&lt;script src=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

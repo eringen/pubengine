@@ -8,7 +8,7 @@ package templates
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-// Dashboard renders the main analytics dashboard page with htmx
+// Dashboard renders the main analytics dashboard page with talkDOM
 func Dashboard() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -42,7 +42,7 @@ func Dashboard() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = PeriodSelector("week", "/admin/analytics/fragments/stats").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = PeriodSelector("week").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -51,10 +51,6 @@ func Dashboard() templ.Component {
 				return templ_7745c5c3_Err
 			}
 			templ_7745c5c3_Err = ContentContainer().Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " <div hx-get=\"/admin/analytics/fragments/stats?period=week\" hx-trigger=\"load\" hx-target=\"#content\"></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

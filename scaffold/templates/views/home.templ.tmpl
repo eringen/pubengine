@@ -11,7 +11,7 @@ templ Home(posts []pubengine.BlogPost, activeTag string, tags []string, siteURL 
 		@Head("{{.SiteName}}")
 		<body class="min-h-screen bg-white text-gray-900">
 			@Nav("{{.SiteName}}")
-			<main id="content" class="max-w-3xl mx-auto px-4 py-8">
+			<main id="content" receiver="content" class="max-w-3xl mx-auto px-4 py-8">
 				@BlogSection(posts, activeTag, tags)
 			</main>
 			@Footer("{{.SiteName}}")
@@ -20,25 +20,23 @@ templ Home(posts []pubengine.BlogPost, activeTag string, tags []string, siteURL 
 	</html>
 }
 
-// HomePartial renders the home page content for HTMX partial updates.
+// HomePartial renders the home page content for talkDOM partial updates.
 templ HomePartial(posts []pubengine.BlogPost, activeTag string, tags []string, siteURL string) {
 	<title>{{.SiteName}}</title>
-	<main id="content" class="max-w-3xl mx-auto px-4 py-8">
+	<main id="content" receiver="content" class="max-w-3xl mx-auto px-4 py-8">
 		@BlogSection(posts, activeTag, tags)
 	</main>
 }
 
 // BlogSection renders the blog post listing with tag filter.
 templ BlogSection(posts []pubengine.BlogPost, activeTag string, tags []string) {
-	<div id="blog-section">
+	<div id="blog-section" receiver="blogSection">
 		if len(tags) > 0 {
 			<div class="flex flex-wrap gap-2 mb-8">
 				<a
-					href="/?partial=blog"
-					hx-get="/?partial=blog"
-					hx-target="#blog-section"
-					hx-swap="outerHTML"
-					hx-push-url="/"
+					href="/"
+					sender="blogSection get: /?partial=blog apply: outer"
+					push-url="/"
 					if activeTag == "" {
 						class="px-3 py-1 text-sm rounded-full bg-gray-900 text-white"
 					} else {
@@ -49,11 +47,9 @@ templ BlogSection(posts []pubengine.BlogPost, activeTag string, tags []string) {
 				</a>
 				for _, tag := range tags {
 					<a
-						href={ templ.SafeURL("/?tag=" + pubengine.PathEscape(tag) + "&partial=blog") }
-						hx-get={ "/?tag=" + pubengine.PathEscape(tag) + "&partial=blog" }
-						hx-target="#blog-section"
-						hx-swap="outerHTML"
-						hx-push-url={ "/?tag=" + pubengine.PathEscape(tag) }
+						href={ templ.SafeURL("/?tag=" + pubengine.PathEscape(tag)) }
+						sender={ "blogSection get: /?tag=" + pubengine.PathEscape(tag) + "&partial=blog apply: outer" }
+						push-url={ "/?tag=" + pubengine.PathEscape(tag) }
 						if tag == activeTag {
 							class="px-3 py-1 text-sm rounded-full bg-gray-900 text-white"
 						} else {
@@ -75,10 +71,8 @@ templ BlogSection(posts []pubengine.BlogPost, activeTag string, tags []string) {
 				<article class="group">
 					<a
 						href={ templ.SafeURL(post.Link + "/") }
-						hx-get={ post.Link + "/?partial=post" }
-						hx-target="#content"
-						hx-swap="outerHTML"
-						hx-push-url={ post.Link + "/" }
+						sender={ "content get: " + post.Link + "/?partial=post apply: outer" }
+						push-url={ post.Link + "/" }
 						class="block"
 					>
 						<h2 class="text-xl font-semibold group-hover:text-blue-600">

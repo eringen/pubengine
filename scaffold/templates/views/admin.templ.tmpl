@@ -74,6 +74,7 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 	<html lang="en" class="bg-white">
 		@Head("Dashboard | {{.SiteName}}")
 		<body class="min-h-screen bg-white text-gray-900">
+			<meta name="csrf-token" content={ csrfToken }/>
 			<nav class="border-b border-gray-200 bg-white">
 				<div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
 					<a href="/admin/" class="text-lg font-bold">{{.SiteName}} Admin</a>
@@ -103,24 +104,20 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 					<h1 class="text-2xl font-bold">Posts</h1>
 					<div class="flex items-center gap-2">
 						<button
-							hx-get="/admin/images/"
-							hx-target="#post-form"
-							hx-swap="innerHTML"
+							sender="postForm get: /admin/images/ apply: inner"
 							class="px-4 py-2 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50"
 						>
 							Images
 						</button>
 						<button
-							hx-get="/admin/post/new/"
-							hx-target="#post-form"
-							hx-swap="innerHTML"
+							sender="postForm get: /admin/post/new/ apply: inner"
 							class="px-4 py-2 bg-gray-900 text-white rounded text-sm font-medium hover:bg-gray-700"
 						>
 							New Post
 						</button>
 					</div>
 				</div>
-				<div id="post-form" class="mb-8"></div>
+				<div id="post-form" receiver="postForm" class="mb-8"></div>
 				<div class="space-y-2">
 					for _, post := range posts {
 						<div class="flex items-center justify-between p-3 border border-gray-200 rounded">
@@ -133,19 +130,13 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 							</div>
 							<div class="flex items-center gap-2">
 								<button
-									hx-get={ "/admin/post/" + post.Slug + "/" }
-									hx-target="#post-form"
-									hx-swap="innerHTML"
+									sender={ "postForm get: /admin/post/" + post.Slug + "/ apply: inner" }
 									class="text-sm text-blue-600 hover:underline"
 								>
 									Edit
 								</button>
 								<button
-									hx-delete={ "/admin/post/" + post.Slug + "/" }
-									hx-target="body"
-									hx-swap="outerHTML"
-									hx-confirm="Delete this post?"
-									hx-headers={ "{\"X-CSRF-Token\": \"" + csrfToken + "\"}" }
+									onclick={ templ.ComponentScript{Call: fmt.Sprintf("if(!confirm('Delete this post?'))return;fetch('/admin/post/%s/',{method:'DELETE',headers:{'X-CSRF-Token':'%s'}}).then(function(r){if(r.ok)location.href='/admin/?msg=deleted'})", post.Slug, csrfToken)} }
 									class="text-sm text-red-600 hover:underline"
 								>
 									Delete
@@ -162,7 +153,7 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 	</html>
 }
 
-// AdminFormPartial renders the post edit/create form loaded via HTMX.
+// AdminFormPartial renders the post edit/create form loaded via talkDOM.
 templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 	<form method="POST" action="/admin/save/" class="space-y-4 p-4 border border-gray-200 rounded">
 		<input type="hidden" name="_csrf" value={ csrfToken }/>
@@ -277,7 +268,7 @@ func formatBytes(b int) string {
 	return fmt.Sprintf("%.1f MB", mb)
 }
 
-// AdminImages renders the image library panel loaded via HTMX.
+// AdminImages renders the image library panel loaded via talkDOM.
 templ AdminImages(images []pubengine.Image, csrfToken string) {
 	<div class="space-y-6 p-4 border border-gray-200 rounded">
 		<div class="flex items-center justify-between">
@@ -291,10 +282,10 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 			</button>
 		</div>
 		<form
-			hx-post="/admin/images/upload/"
-			hx-target="#post-form"
-			hx-swap="innerHTML"
-			hx-encoding="multipart/form-data"
+			action="/admin/images/upload/"
+			method="POST"
+			enctype="multipart/form-data"
+			onsubmit="event.preventDefault();fetch(this.action,{method:'POST',body:new FormData(this)}).then(function(r){return r.text()}).then(function(t){document.getElementById('post-form').innerHTML=t})"
 			class="flex items-end gap-3"
 		>
 			<input type="hidden" name="_csrf" value={ csrfToken }/>
@@ -341,11 +332,7 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 								</button>
 								<span class="text-gray-300">|</span>
 								<button
-									hx-delete={ "/admin/images/" + img.Filename + "/" }
-									hx-target="#post-form"
-									hx-swap="innerHTML"
-									hx-confirm="Delete this image?"
-									hx-headers={ "{\"X-CSRF-Token\": \"" + csrfToken + "\"}" }
+									onclick={ templ.ComponentScript{Call: fmt.Sprintf("if(!confirm('Delete this image?'))return;fetch('/admin/images/%s/',{method:'DELETE',headers:{'X-CSRF-Token':'%s'}}).then(function(r){return r.text()}).then(function(t){document.getElementById('post-form').innerHTML=t})", img.Filename, csrfToken)} }
 									class="text-xs text-red-600 hover:underline"
 								>
 									Delete
