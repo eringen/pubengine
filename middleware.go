@@ -50,7 +50,7 @@ func (a *App) setupMiddleware() {
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self'; connect-src 'self' data: blob:; worker-src 'self' blob:; media-src 'self' data:",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cloud.umami.is https://plausible.io blob:; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self'; connect-src 'self' data: blob: https://plausible.io https://api-gateway.umami.dev; worker-src 'self' blob:; media-src 'self' data:",
 		HSTSMaxAge:            31536000,
 		HSTSExcludeSubdomains: false,
 	}))
