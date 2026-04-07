@@ -50,7 +50,7 @@ func (a *App) setupMiddleware() {
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",
 		ReferrerPolicy:        "strict-origin-when-cross-origin",
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://plausible.io https://nanolytica.org https://www.googletagmanager.com blob:; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self'; connect-src 'self' data: blob: https://plausible.io https://nanolytica.org https://www.google-analytics.com https://www.googletagmanager.com; worker-src 'self' blob:; media-src 'self' data:",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://nanolytica.org https://www.googletagmanager.com blob:; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; font-src 'self'; connect-src 'self' data: blob: https://nanolytica.org https://www.google-analytics.com https://www.googletagmanager.com; worker-src 'self' blob:; media-src 'self' data:",
 		HSTSMaxAge:            31536000,
 		HSTSExcludeSubdomains: false,
 	}))
