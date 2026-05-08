@@ -2,7 +2,7 @@ package pubengine
 
 import (
 	"database/sql"
-	"os"
+	"path/filepath"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -10,8 +10,7 @@ import (
 
 func setupTestStore(t *testing.T) (*Store, func()) {
 	t.Helper()
-	path := "data/test_blog.db"
-	os.Remove(path) // clean up any existing test db
+	path := filepath.Join(t.TempDir(), "blog.db")
 
 	s, err := NewStore(path)
 	if err != nil {
@@ -20,7 +19,6 @@ func setupTestStore(t *testing.T) (*Store, func()) {
 
 	cleanup := func() {
 		s.Close()
-		os.Remove(path)
 	}
 
 	return s, cleanup

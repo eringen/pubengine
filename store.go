@@ -2,10 +2,10 @@ package pubengine
 
 import (
 	"database/sql"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/eringen/pubengine/internal/sqliteutil"
 )
 
 // Store wraps a SQLite database and provides CRUD operations for blog posts.
@@ -16,31 +16,13 @@ type Store struct {
 // NewStore opens (or creates) the SQLite database at path, ensures the data
 // directory exists, and runs schema migrations.
 func NewStore(path string) (*Store, error) {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
-	db, err := sql.Open("sqlite", path)
+	db, err := sqliteutil.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	// Enable WAL mode for concurrent read/write access, set a busy timeout
-	// so writers wait instead of returning SQLITE_BUSY immediately, and tune
-	// performance: synchronous=NORMAL is safe with WAL and avoids an fsync
-	// per transaction; larger cache and mmap reduce disk I/O.
-	if _, err := db.Exec(`
-		PRAGMA journal_mode=WAL;
-		PRAGMA busy_timeout=5000;
-		PRAGMA synchronous=NORMAL;
-		PRAGMA cache_size=-8000;
-		PRAGMA mmap_size=268435456;
-	`); err != nil {
-		return nil, err
-	}
-	db.SetMaxOpenConns(4)
-	db.SetMaxIdleConns(4)
 	s := &Store{db: db}
 	if err := s.ensureSchema(); err != nil {
+		db.Close()
 		return nil, err
 	}
 	return s, nil
@@ -119,7 +101,7 @@ func (s *Store) ListPosts(tag string) ([]BlogPost, error) {
 		}
 		posts = append(posts, post)
 	}
-	return posts, nil
+	return posts, rows.Err()
 }
 
 // ListTags returns a sorted, deduplicated slice of all tags from published posts.
@@ -219,7 +201,7 @@ func (s *Store) ListAllPosts() ([]BlogPost, error) {
 			Published: published == 1,
 		})
 	}
-	return posts, nil
+	return posts, rows.Err()
 }
 
 // SavePost upserts a blog post. Tags are normalized to lowercase.

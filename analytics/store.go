@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/eringen/pubengine/analytics/sqlcgen"
-	_ "modernc.org/sqlite"
+	"github.com/eringen/pubengine/internal/sqliteutil"
 )
 
 // Store provides database operations for analytics.
@@ -20,25 +20,9 @@ type Store struct {
 
 // NewStore creates a new analytics store.
 func NewStore(dbPath string) (*Store, error) {
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sqliteutil.Open(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open analytics db: %w", err)
-	}
-
-	db.SetMaxOpenConns(4)
-	db.SetMaxIdleConns(4)
-
-	// WAL mode for concurrent reads, synchronous=NORMAL avoids fsync per
-	// write (safe with WAL), busy_timeout prevents SQLITE_BUSY errors,
-	// and larger cache/mmap reduce disk I/O.
-	if _, err := db.Exec(`
-		PRAGMA journal_mode=WAL;
-		PRAGMA busy_timeout=5000;
-		PRAGMA synchronous=NORMAL;
-		PRAGMA cache_size=-8000;
-		PRAGMA mmap_size=268435456;
-	`); err != nil {
-		return nil, fmt.Errorf("enable pragmas: %w", err)
 	}
 
 	s := &Store{
@@ -46,9 +30,11 @@ func NewStore(dbPath string) (*Store, error) {
 		q:  sqlcgen.New(db),
 	}
 	if err := s.ensureSchema(); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("ensure schema: %w", err)
 	}
 	if err := s.migrate(); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 

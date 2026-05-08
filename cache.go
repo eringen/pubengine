@@ -2,6 +2,8 @@ package pubengine
 
 import (
 	"database/sql"
+	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -26,12 +28,13 @@ func NewPostCache(s *Store, ttl time.Duration) *PostCache {
 }
 
 func (c *PostCache) valid() bool {
-	return c.posts != nil && time.Since(c.fetched) < c.ttl
+	return !c.fetched.IsZero() && time.Since(c.fetched) < c.ttl
 }
 
 // Invalidate clears the cache so the next read triggers a fresh load.
 func (c *PostCache) Invalidate() {
 	c.mu.Lock()
+	c.fetched = time.Time{}
 	c.posts = nil
 	c.tags = nil
 	c.mu.Unlock()
@@ -45,10 +48,17 @@ func (c *PostCache) load() error {
 	if err != nil {
 		return err
 	}
-	tags, err := c.store.ListTags()
-	if err != nil {
-		return err
+	set := make(map[string]struct{})
+	for _, p := range posts {
+		for _, tag := range p.Tags {
+			set[tag] = struct{}{}
+		}
 	}
+	tags := make([]string, 0, len(set))
+	for tag := range set {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
 	c.posts = posts
 	c.tags = tags
 	c.fetched = time.Now()
@@ -81,14 +91,14 @@ func (c *PostCache) ListPosts(tag string) ([]BlogPost, error) {
 		return nil, err
 	}
 	if tag == "" {
-		return posts, nil
+		return clonePosts(posts), nil
 	}
 	normalized := normalizeTag(tag)
 	var filtered []BlogPost
 	for _, p := range posts {
 		for _, t := range p.Tags {
 			if normalizeTag(t) == normalized {
-				filtered = append(filtered, p)
+				filtered = append(filtered, clonePost(p))
 				break
 			}
 		}
@@ -99,7 +109,7 @@ func (c *PostCache) ListPosts(tag string) ([]BlogPost, error) {
 // ListTags returns all unique tags from published posts.
 func (c *PostCache) ListTags() ([]string, error) {
 	_, tags, err := c.ensureLoaded()
-	return tags, err
+	return slices.Clone(tags), err
 }
 
 // GetPost returns a single published post by slug from the cache.
@@ -110,7 +120,7 @@ func (c *PostCache) GetPost(slug string) (BlogPost, error) {
 	}
 	for _, p := range posts {
 		if p.Slug == slug {
-			return p, nil
+			return clonePost(p), nil
 		}
 	}
 	return BlogPost{}, ErrNotFound
@@ -118,4 +128,17 @@ func (c *PostCache) GetPost(slug string) (BlogPost, error) {
 
 func normalizeTag(t string) string {
 	return strings.ToLower(strings.TrimSpace(t))
+}
+
+func clonePost(p BlogPost) BlogPost {
+	p.Tags = slices.Clone(p.Tags)
+	return p
+}
+
+func clonePosts(posts []BlogPost) []BlogPost {
+	result := make([]BlogPost, len(posts))
+	for i, p := range posts {
+		result[i] = clonePost(p)
+	}
+	return result
 }
