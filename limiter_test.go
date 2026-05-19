@@ -1,6 +1,8 @@
 package pubengine
 
 import (
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -48,5 +50,27 @@ func TestLoginLimiterIsPerIP(t *testing.T) {
 	}
 	if limiter.Allow("203.0.113.30") {
 		t.Fatalf("expected first ip to be blocked after max")
+	}
+}
+
+func TestLoginLimiterConcurrentAdmission(t *testing.T) {
+	l := NewLoginLimiter(5, time.Minute)
+	var allowed atomic.Int32
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			if l.Allow("same-ip") {
+				allowed.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+	if allowed.Load() != 5 {
+		t.Fatalf("admitted %d attempts", allowed.Load())
 	}
 }

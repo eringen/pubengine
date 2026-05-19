@@ -71,12 +71,8 @@ func New(cfg SiteConfig, views ViewFuncs, opts ...Option) *App {
 
 // Start initializes the database, cache, middleware, routes, and starts the server.
 func (a *App) Start() error {
-	// Validate required config
-	if a.Config.AdminPassword == "" {
-		return fmt.Errorf("pubengine: AdminPassword is required")
-	}
-	if a.Config.SessionSecret == "" {
-		return fmt.Errorf("pubengine: SessionSecret is required")
+	if err := a.Config.validate(); err != nil {
+		return err
 	}
 
 	// Initialize store

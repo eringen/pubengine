@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io/fs"
 	"os"
@@ -14,9 +16,11 @@ import (
 
 // scaffoldData holds the template variables passed to every scaffold template.
 type scaffoldData struct {
-	ProjectName string
-	ModuleName  string
-	SiteName    string
+	ProjectName   string
+	ModuleName    string
+	SiteName      string
+	AdminPassword string
+	SessionSecret string
 }
 
 func runNew(name string) error {
@@ -31,18 +35,30 @@ func runNew(name string) error {
 		return fmt.Errorf("directory %q already exists", dirName)
 	}
 
+	// Give every new project independent credentials.
+	password, err := randomSecret()
+	if err != nil {
+		return err
+	}
+	secret, err := randomSecret()
+	if err != nil {
+		return err
+	}
+
 	// Build template data.
 	data := scaffoldData{
-		ProjectName: dirName,
-		ModuleName:  name,
-		SiteName:    toTitle(dirName),
+		ProjectName:   dirName,
+		ModuleName:    name,
+		SiteName:      toTitle(dirName),
+		AdminPassword: password,
+		SessionSecret: secret,
 	}
 
 	fmt.Printf("Creating new pubengine project: %s\n\n", dirName)
 
 	root := "templates"
 
-	err := fs.WalkDir(scaffold.Templates, root, func(path string, d fs.DirEntry, err error) error {
+	err = fs.WalkDir(scaffold.Templates, root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -86,7 +102,11 @@ func runNew(name string) error {
 			return err
 		}
 
-		f, err := os.Create(outPath)
+		mode := os.FileMode(0o644)
+		if filepath.Base(outPath) == ".env.example" {
+			mode = 0o600
+		}
+		f, err := os.OpenFile(outPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 		if err != nil {
 			return fmt.Errorf("create %s: %w", outPath, err)
 		}
@@ -142,4 +162,12 @@ func toTitle(s string) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+func randomSecret() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }

@@ -1,6 +1,10 @@
 package pubengine
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 // SiteConfig holds all configuration for a pubengine site.
 type SiteConfig struct {
@@ -16,7 +20,7 @@ type SiteConfig struct {
 	AnalyticsDatabasePath string // Analytics SQLite path (default "data/analytics.db")
 
 	AdminPassword string // Required: admin login password
-	SessionSecret string // Required: session encryption secret
+	SessionSecret string // Required: cookie signing key, at least 32 bytes
 	CookieSecure  bool   // Set true for HTTPS
 
 	GoogleClientID     string // Google OAuth client ID (optional)
@@ -68,4 +72,17 @@ func WithStaticDir(dir string) Option {
 	return func(a *App) {
 		a.staticDir = dir
 	}
+}
+
+func (c SiteConfig) validate() error {
+	if strings.TrimSpace(c.AdminPassword) == "" || strings.EqualFold(c.AdminPassword, "changeme") {
+		return fmt.Errorf("pubengine: set AdminPassword to a non-placeholder password")
+	}
+	if len(c.SessionSecret) < 32 || strings.Contains(strings.ToLower(c.SessionSecret), "changeme") {
+		return fmt.Errorf("pubengine: SessionSecret must be a random signing key of at least 32 bytes")
+	}
+	if c.PostCacheTTL < 0 {
+		return fmt.Errorf("pubengine: PostCacheTTL must not be negative")
+	}
+	return nil
 }

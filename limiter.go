@@ -46,18 +46,28 @@ func (l *LoginLimiter) cleanup() {
 	}
 }
 
-// Allow checks if the IP has not exceeded the rate limit and records the attempt.
-// Kept for backwards compatibility; prefer Check + Record for login flows.
+// Allow atomically checks and records an attempt, including successful logins.
 func (l *LoginLimiter) Allow(ip string) bool {
-	if !l.Check(ip) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	cutoff := time.Now().Add(-l.window)
+	hits := l.attempts[ip]
+	kept := hits[:0]
+	for _, hit := range hits {
+		if hit.After(cutoff) {
+			kept = append(kept, hit)
+		}
+	}
+	if len(kept) >= l.max {
+		l.attempts[ip] = kept
 		return false
 	}
-	l.Record(ip)
+	l.attempts[ip] = append(kept, time.Now())
 	return true
 }
 
 // Check returns true if the IP has not exceeded the rate limit.
-// It does not record an attempt — call Record separately on failure.
+// This is informational only. Use Allow for atomic admission.
 func (l *LoginLimiter) Check(ip string) bool {
 	cutoff := time.Now().Add(-l.window)
 
