@@ -32,6 +32,11 @@ func (a *App) handlePost(c echo.Context) error {
 	post, err := a.Cache.GetPost(slug)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			if target, redirectErr := a.Store.ResolvePostRedirect(slug); redirectErr == nil {
+				return c.Redirect(http.StatusMovedPermanently, "/blog/"+target+"/")
+			} else if redirectErr != sql.ErrNoRows {
+				return redirectErr
+			}
 			return RenderStatus(c, http.StatusNotFound, a.Views.NotFound())
 		}
 		return err

@@ -105,7 +105,11 @@ func TestSavePostUpdate(t *testing.T) {
 		t.Fatalf("SavePost failed: %v", err)
 	}
 
-	// Update post
+	// Update the loaded revision.
+	post, err := s.GetPostAny(post.Slug)
+	if err != nil {
+		t.Fatal(err)
+	}
 	post.Title = "Updated Title"
 	post.Tags = []string{"updated", "modified"}
 	if err := s.SavePost(post); err != nil {

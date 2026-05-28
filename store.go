@@ -2,8 +2,11 @@ package pubengine
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/eringen/pubengine/internal/sqliteutil"
 )
@@ -42,18 +45,42 @@ CREATE TABLE IF NOT EXISTS posts (
     tags TEXT NOT NULL,
     summary TEXT NOT NULL,
     content TEXT NOT NULL,
-    published INTEGER NOT NULL DEFAULT 1
+    published INTEGER NOT NULL DEFAULT 1,
+    revision INTEGER NOT NULL DEFAULT 1
 );
 `)
 	if err != nil {
 		return err
 	}
-	if _, err := s.db.Exec(`ALTER TABLE posts ADD COLUMN published INTEGER NOT NULL DEFAULT 1;`); err != nil {
-		if !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+	rows, err := s.db.Query("PRAGMA table_info(posts)")
+	if err != nil {
+		return err
+	}
+	columns := map[string]bool{}
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, kind string
+		var def any
+		if err := rows.Scan(&cid, &name, &kind, &notnull, &def, &pk); err != nil {
+			rows.Close()
 			return err
+		}
+		columns[name] = true
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, column := range []string{"published", "revision"} {
+		if !columns[column] {
+			if _, err := s.db.Exec("ALTER TABLE posts ADD COLUMN " + column + " INTEGER NOT NULL DEFAULT 1"); err != nil {
+				return err
+			}
 		}
 	}
 	_, err = s.db.Exec(`
+CREATE TABLE IF NOT EXISTS post_redirects (slug TEXT PRIMARY KEY, target TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS images (
     filename TEXT PRIMARY KEY,
     original_name TEXT NOT NULL,
@@ -72,10 +99,10 @@ func (s *Store) ListPosts(tag string) ([]BlogPost, error) {
 	var rows *sql.Rows
 	var err error
 	if tag == "" {
-		rows, err = s.db.Query(`SELECT slug, title, date, tags, summary, content, published FROM posts WHERE published = 1 ORDER BY date DESC`)
+		rows, err = s.db.Query(`SELECT slug, title, date, tags, summary, content, published, revision FROM posts WHERE published = 1 ORDER BY date DESC`)
 	} else {
 		normalizedTag := strings.ToLower(strings.TrimSpace(tag))
-		rows, err = s.db.Query(`SELECT slug, title, date, tags, summary, content, published FROM posts WHERE published = 1 AND instr(lower(tags), ',' || ? || ',') > 0 ORDER BY date DESC`, normalizedTag)
+		rows, err = s.db.Query(`SELECT slug, title, date, tags, summary, content, published, revision FROM posts WHERE published = 1 AND instr(lower(tags), ',' || ? || ',') > 0 ORDER BY date DESC`, normalizedTag)
 	}
 	if err != nil {
 		return nil, err
@@ -86,18 +113,21 @@ func (s *Store) ListPosts(tag string) ([]BlogPost, error) {
 	for rows.Next() {
 		var slug, title, date, tags, summary, content string
 		var published int
-		if err := rows.Scan(&slug, &title, &date, &tags, &summary, &content, &published); err != nil {
+		var revision int64
+		if err := rows.Scan(&slug, &title, &date, &tags, &summary, &content, &published, &revision); err != nil {
 			return nil, err
 		}
 		post := BlogPost{
-			Slug:      slug,
-			Title:     title,
-			Date:      date,
-			Tags:      ParseTags(tags),
-			Summary:   summary,
-			Content:   content,
-			Link:      "/blog/" + slug,
-			Published: published == 1,
+			Slug:         slug,
+			Title:        title,
+			Date:         date,
+			Tags:         ParseTags(tags),
+			Summary:      summary,
+			Content:      content,
+			Link:         "/blog/" + slug,
+			Published:    published == 1,
+			Revision:     revision,
+			OriginalSlug: slug,
 		}
 		posts = append(posts, post)
 	}
@@ -137,20 +167,23 @@ func (s *Store) ListTags() ([]string, error) {
 func (s *Store) GetPost(slug string) (BlogPost, error) {
 	var title, date, tags, summary, content string
 	var published int
-	err := s.db.QueryRow(`SELECT title, date, tags, summary, content, published FROM posts WHERE slug = ? AND published = 1`, slug).
-		Scan(&title, &date, &tags, &summary, &content, &published)
+	var revision int64
+	err := s.db.QueryRow(`SELECT title, date, tags, summary, content, published, revision FROM posts WHERE slug = ? AND published = 1`, slug).
+		Scan(&title, &date, &tags, &summary, &content, &published, &revision)
 	if err != nil {
 		return BlogPost{}, err
 	}
 	return BlogPost{
-		Slug:      slug,
-		Title:     title,
-		Date:      date,
-		Tags:      ParseTags(tags),
-		Summary:   summary,
-		Content:   content,
-		Link:      "/blog/" + slug,
-		Published: published == 1,
+		Slug:         slug,
+		Title:        title,
+		Date:         date,
+		Tags:         ParseTags(tags),
+		Summary:      summary,
+		Content:      content,
+		Link:         "/blog/" + slug,
+		Published:    published == 1,
+		Revision:     revision,
+		OriginalSlug: slug,
 	}, nil
 }
 
@@ -158,26 +191,29 @@ func (s *Store) GetPost(slug string) (BlogPost, error) {
 func (s *Store) GetPostAny(slug string) (BlogPost, error) {
 	var title, date, tags, summary, content string
 	var published int
-	err := s.db.QueryRow(`SELECT title, date, tags, summary, content, published FROM posts WHERE slug = ?`, slug).
-		Scan(&title, &date, &tags, &summary, &content, &published)
+	var revision int64
+	err := s.db.QueryRow(`SELECT title, date, tags, summary, content, published, revision FROM posts WHERE slug = ?`, slug).
+		Scan(&title, &date, &tags, &summary, &content, &published, &revision)
 	if err != nil {
 		return BlogPost{}, err
 	}
 	return BlogPost{
-		Slug:      slug,
-		Title:     title,
-		Date:      date,
-		Tags:      ParseTags(tags),
-		Summary:   summary,
-		Content:   content,
-		Link:      "/blog/" + slug,
-		Published: published == 1,
+		Slug:         slug,
+		Title:        title,
+		Date:         date,
+		Tags:         ParseTags(tags),
+		Summary:      summary,
+		Content:      content,
+		Link:         "/blog/" + slug,
+		Published:    published == 1,
+		Revision:     revision,
+		OriginalSlug: slug,
 	}, nil
 }
 
 // ListAllPosts returns every post (published and drafts) ordered by date descending.
 func (s *Store) ListAllPosts() ([]BlogPost, error) {
-	rows, err := s.db.Query(`SELECT slug, title, date, tags, summary, content, published FROM posts ORDER BY date DESC`)
+	rows, err := s.db.Query(`SELECT slug, title, date, tags, summary, content, published, revision FROM posts ORDER BY date DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -187,43 +223,131 @@ func (s *Store) ListAllPosts() ([]BlogPost, error) {
 	for rows.Next() {
 		var slug, title, date, tags, summary, content string
 		var published int
-		if err := rows.Scan(&slug, &title, &date, &tags, &summary, &content, &published); err != nil {
+		var revision int64
+		if err := rows.Scan(&slug, &title, &date, &tags, &summary, &content, &published, &revision); err != nil {
 			return nil, err
 		}
 		posts = append(posts, BlogPost{
-			Slug:      slug,
-			Title:     title,
-			Date:      date,
-			Tags:      ParseTags(tags),
-			Summary:   summary,
-			Content:   content,
-			Link:      "/blog/" + slug,
-			Published: published == 1,
+			Slug:         slug,
+			Title:        title,
+			Date:         date,
+			Tags:         ParseTags(tags),
+			Summary:      summary,
+			Content:      content,
+			Link:         "/blog/" + slug,
+			Published:    published == 1,
+			Revision:     revision,
+			OriginalSlug: slug,
 		})
 	}
 	return posts, rows.Err()
 }
 
-// SavePost upserts a blog post. Tags are normalized to lowercase.
+// ErrPostConflict means a slug is taken or the editor's revision is stale.
+var ErrPostConflict = errors.New("post changed or slug is already in use; reload before saving")
+
+// SavePost creates a new post when Revision is zero, otherwise updates the loaded
+// OriginalSlug only if its revision still matches. Fetch the post again after saving.
 func (s *Store) SavePost(p BlogPost) error {
-	normalizedTags := make([]string, len(p.Tags))
-	for i, t := range p.Tags {
-		normalizedTags[i] = strings.ToLower(strings.TrimSpace(t))
+	if msg := ValidateSlug(p.Slug); msg != "" {
+		return fmt.Errorf("%s", msg)
 	}
-	tagString := "," + strings.Join(normalizedTags, ",") + ","
-	published := 0
-	if p.Published {
-		published = 1
+	if strings.TrimSpace(p.Title) == "" {
+		return fmt.Errorf("title is required")
 	}
-	_, err := s.db.Exec(`INSERT OR REPLACE INTO posts (slug, title, date, tags, summary, content, published) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		p.Slug, p.Title, p.Date, tagString, p.Summary, p.Content, published)
-	return err
+	if p.Date != "" {
+		if _, err := time.Parse("2006-01-02", p.Date); err != nil {
+			return fmt.Errorf("use YYYY-MM-DD for the date")
+		}
+	}
+	tags := FilterEmpty(p.Tags)
+	for i, t := range tags {
+		tags[i] = strings.ToLower(t)
+	}
+	tagString := "," + strings.Join(tags, ",") + ","
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var occupied int
+	if err := tx.QueryRow("SELECT count(*) FROM post_redirects WHERE slug = ?", p.Slug).Scan(&occupied); err != nil {
+		return err
+	}
+	if occupied > 0 {
+		return ErrPostConflict
+	}
+	if p.Revision == 0 {
+		if p.OriginalSlug != "" {
+			return ErrPostConflict
+		}
+		result, err := tx.Exec(`INSERT INTO posts (slug,title,date,tags,summary,content,published) VALUES (?,?,?,?,?,?,?) ON CONFLICT(slug) DO NOTHING`, p.Slug, p.Title, p.Date, tagString, p.Summary, p.Content, p.Published)
+		if err != nil {
+			return err
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			return ErrPostConflict
+		}
+	} else {
+		if p.OriginalSlug == "" {
+			return ErrPostConflict
+		}
+		if p.Slug != p.OriginalSlug {
+			if err := tx.QueryRow("SELECT count(*) FROM posts WHERE slug = ?", p.Slug).Scan(&occupied); err != nil {
+				return err
+			}
+			if occupied > 0 {
+				return ErrPostConflict
+			}
+		}
+		result, err := tx.Exec(`UPDATE posts SET slug=?,title=?,date=?,tags=?,summary=?,content=?,published=?,revision=revision+1 WHERE slug=? AND revision=?`, p.Slug, p.Title, p.Date, tagString, p.Summary, p.Content, p.Published, p.OriginalSlug, p.Revision)
+		if err != nil {
+			return err
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			return ErrPostConflict
+		}
+		if p.Slug != p.OriginalSlug {
+			if _, err := tx.Exec("UPDATE post_redirects SET target=? WHERE target=?", p.Slug, p.OriginalSlug); err != nil {
+				return err
+			}
+			if _, err := tx.Exec("INSERT INTO post_redirects (slug,target) VALUES (?,?)", p.OriginalSlug, p.Slug); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
 }
 
-// DeletePost removes a post by slug.
+// ResolvePostRedirect returns the current slug only when the destination is published.
+func (s *Store) ResolvePostRedirect(slug string) (string, error) {
+	var target string
+	err := s.db.QueryRow(`SELECT r.target FROM post_redirects r JOIN posts p ON p.slug=r.target WHERE r.slug=? AND p.published=1`, slug).Scan(&target)
+	return target, err
+}
+
+// DeletePost removes a post and its previous URLs atomically.
 func (s *Store) DeletePost(slug string) error {
-	_, err := s.db.Exec(`DELETE FROM posts WHERE slug = ?`, slug)
-	return err
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("DELETE FROM post_redirects WHERE target=?", slug); err != nil {
+		return err
+	}
+	if _, err := tx.Exec("DELETE FROM posts WHERE slug=?", slug); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // SaveImage inserts image metadata into the database.

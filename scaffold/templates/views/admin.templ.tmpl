@@ -157,6 +157,11 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 	<form method="POST" action="/admin/save/" class="space-y-4 p-4 border border-gray-200 rounded">
 		<input type="hidden" name="_csrf" value={ csrfToken }/>
+        <input type="hidden" name="original_slug" value={ post.OriginalSlug }/>
+        <input type="hidden" name="revision" value={ fmt.Sprint(post.Revision) }/>
+        if post.Error != "" {
+            <p role="alert" class="text-red-700">{ post.Error }</p>
+        }
 		<div class="grid grid-cols-2 gap-4">
 			<div>
 				<label for="title" class="block text-sm font-medium mb-1">Title</label>

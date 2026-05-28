@@ -2,14 +2,17 @@ package pubengine
 
 // BlogPost is the core content type stored in SQLite and rendered by templates.
 type BlogPost struct {
-	Title     string
-	Date      string
-	Tags      []string
-	Summary   string
-	Link      string
-	Slug      string
-	Content   string
-	Published bool
+	Title        string
+	Date         string
+	Tags         []string
+	Summary      string
+	Link         string
+	Slug         string
+	Content      string
+	Published    bool
+	OriginalSlug string // Identity loaded for an edit; empty for new posts.
+	Revision     int64  // Optimistic concurrency token; zero for new posts.
+	Error        string // Editor validation message; not persisted.
 }
 
 // Image represents an uploaded image stored in the uploads directory.

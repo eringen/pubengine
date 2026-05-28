@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"net/url"
 	"path"
+	"regexp"
 	"strings"
 )
 
 const maxSlugLength = 128
+
+var slugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 // reservedSlugs are URL path segments that would collide with framework routes.
 var reservedSlugs = map[string]struct{}{
@@ -31,6 +34,9 @@ func ValidateSlug(slug string) string {
 	}
 	if _, ok := reservedSlugs[slug]; ok {
 		return "Slug \"" + slug + "\" is reserved. Choose a different slug."
+	}
+	if !slugPattern.MatchString(slug) {
+		return "Use lowercase letters, numbers, and single hyphens in the slug."
 	}
 	return ""
 }

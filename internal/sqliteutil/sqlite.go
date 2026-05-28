@@ -27,6 +27,7 @@ func Open(path string) (*sql.DB, error) {
 		return nil, err
 	}
 	q := u.Query()
+	q.Set("_txlock", "immediate")
 	memory := u.Opaque == ":memory:" || u.Path == ":memory:" || q.Get("mode") == "memory"
 	if !memory && q.Get("mode") != "ro" {
 		filename := u.Path

@@ -3,8 +3,9 @@ package pubengine
 import (
 	"crypto/subtle"
 	"database/sql"
+	"errors"
 	"net/http"
-	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -79,39 +80,37 @@ func (a *App) handleAdminSave(c echo.Context) error {
 	if err := c.Request().ParseForm(); err != nil {
 		return err
 	}
-	title := strings.TrimSpace(c.FormValue("title"))
-	slug := strings.TrimSpace(c.FormValue("slug"))
-	if slug == "" {
-		slug = Slugify(title)
+	p := BlogPost{
+		Title: strings.TrimSpace(c.FormValue("title")), Slug: strings.TrimSpace(c.FormValue("slug")),
+		OriginalSlug: c.FormValue("original_slug"), Date: strings.TrimSpace(c.FormValue("date")),
+		Tags: FilterEmpty(strings.Split(c.FormValue("tags"), ",")), Summary: c.FormValue("summary"),
+		Content: c.FormValue("content"), Published: c.FormValue("published") != "",
 	}
-	if msg := ValidateSlug(slug); msg != "" {
-		return c.Redirect(http.StatusSeeOther, "/admin/?msg="+url.QueryEscape(msg))
+	if p.Slug == "" {
+		p.Slug = Slugify(p.Title)
 	}
-	date := strings.TrimSpace(c.FormValue("date"))
-	if date == "" {
-		date = time.Now().Format("2006-01-02")
+	if p.Date == "" {
+		p.Date = time.Now().Format("2006-01-02")
 	}
-	if _, err := time.Parse("2006-01-02", date); err != nil {
-		return c.Redirect(http.StatusSeeOther, "/admin/?msg=Invalid+date+format.+Use+YYYY-MM-DD.")
+	if revision := c.FormValue("revision"); revision != "" {
+		var err error
+		p.Revision, err = strconv.ParseInt(revision, 10, 64)
+		if err != nil || p.Revision < 0 {
+			p.Error = "Invalid revision. Reload the editor."
+			return RenderStatus(c, http.StatusBadRequest, a.Views.AdminFormPartial(p, CsrfToken(c)))
+		}
 	}
-	tags := strings.Split(c.FormValue("tags"), ",")
-	for i := range tags {
-		tags[i] = strings.TrimSpace(tags[i])
-	}
-	tags = FilterEmpty(tags)
-	summary := c.FormValue("summary")
-	content := c.FormValue("content")
-	published := c.FormValue("published") != ""
-	if err := a.Store.SavePost(BlogPost{
-		Slug:      slug,
-		Title:     title,
-		Date:      date,
-		Tags:      tags,
-		Summary:   summary,
-		Content:   content,
-		Published: published,
-	}); err != nil {
-		return err
+	if err := a.Store.SavePost(p); err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, ErrPostConflict) {
+			status = http.StatusConflict
+		} else if ValidateSlug(p.Slug) == "" && p.Title != "" {
+			if _, dateErr := time.Parse("2006-01-02", p.Date); dateErr == nil {
+				return err
+			}
+		}
+		p.Error = err.Error()
+		return RenderStatus(c, status, a.Views.AdminFormPartial(p, CsrfToken(c)))
 	}
 	a.Cache.Invalidate()
 	return a.renderAdminDashboard(c, "saved")
