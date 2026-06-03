@@ -22,7 +22,7 @@ var (
 	reLink             = regexp.MustCompile(`\[(.*?)\]\((.*?)\)(\^)?`)
 	reOrderedList      = regexp.MustCompile(`^(\d+)\.\s`)
 	// ![alt](url){style} or ![alt](url){style|width|height}
-	reImg = regexp.MustCompile(`\!\[(.*?)\]\((.*?)\)\{([^|}]*?)(?:\|(\d+)\|(\d+))?\}`)
+	reImg = regexp.MustCompile(`\!\[(.*?)\]\((.*?)\)(?:\{([^|}]*?)(?:\|(\d+)\|(\d+))?\})?`)
 )
 
 // Markdown returns a templ.Component that renders md as HTML.
@@ -328,16 +328,16 @@ func FormatInline(s string, imageCount *int) string {
 				out.WriteString(alt)
 				break
 			}
-			width, height := "1024", "768"
+			dimensions := ""
 			if match[4] != "" && match[5] != "" {
-				width, height = match[4], match[5]
+				dimensions = ` width="` + match[4] + `" height="` + match[5] + `"`
 			}
 			*imageCount++
-			load := `loading="eager"`
+			load := `loading="lazy"`
 			if *imageCount == 1 {
 				load = `fetchpriority="high"`
 			}
-			out.WriteString(`<img ` + load + ` width="` + width + `" height="` + height + `" alt="` + alt + `" src="` + src + `" style="` + html.EscapeString(match[3]) + `" decoding="async"/>`)
+			out.WriteString(`<img ` + load + dimensions + ` alt="` + alt + `" src="` + src + `" style="` + html.EscapeString(match[3]) + `" decoding="async"/>`)
 		default:
 			match := reLink.FindStringSubmatch(token)
 			href := SafeURL(match[2])

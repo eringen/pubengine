@@ -330,7 +330,7 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 							<div class="flex items-center gap-1">
 								<button
 									type="button"
-									onclick={ copyMarkdown(fmt.Sprintf("![%s](/public/uploads/%s)", img.Filename, img.Filename)) }
+									onclick={ copyMarkdown(fmt.Sprintf("![%s](/public/uploads/%s){|%d|%d}", img.Filename, img.Filename, img.Width, img.Height)) }
 									class="text-xs text-blue-600 hover:underline"
 								>
 									Copy Markdown

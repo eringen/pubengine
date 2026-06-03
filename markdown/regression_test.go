@@ -79,3 +79,17 @@ func TestDangerousURLsAndQuotesRemainInert(t *testing.T) {
 		visit(doc)
 	}
 }
+
+func TestCopiedImagesAndLoading(t *testing.T) {
+	count := 0
+	first := FormatInline(`![photo](/uploads/photo.jpg)`, &count)
+	if !strings.Contains(first, `<img fetchpriority="high"`) || strings.Contains(first, `width=`) {
+		t.Fatal(first)
+	}
+	next := FormatInline(`![photo](/uploads/photo.jpg){|800|600}`, &count)
+	for _, want := range []string{`loading="lazy"`, `width="800"`, `height="600"`, `src="/uploads/photo.jpg"`} {
+		if !strings.Contains(next, want) {
+			t.Fatal(next)
+		}
+	}
+}
