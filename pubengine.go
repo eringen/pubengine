@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/a-h/templ"
@@ -49,6 +50,7 @@ type App struct {
 	analyticsStore *analytics.Store
 	customRoutes   []func(*App)
 	staticDir      string
+	imageMu        sync.Mutex
 }
 
 // New creates a new pubengine App with the given configuration and view functions.
@@ -140,7 +142,7 @@ func (a *App) setupRoutes() {
 	// Public routes
 	e.GET("/sitemap.xml", a.handleSitemap)
 	e.GET("/feed.xml", a.handleFeed)
-	e.GET("/blog", handleBlogRedirect)
+	e.GET("/blog/", handleBlogRedirect)
 	e.GET("/", a.handleHome)
 	e.GET("/blog/:slug/", a.handlePost)
 

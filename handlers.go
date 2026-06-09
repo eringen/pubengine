@@ -84,8 +84,11 @@ func (a *App) httpErrorHandler(err error, c echo.Context) {
 		return
 	}
 	he, ok := err.(*echo.HTTPError)
-	if ok && he.Code == http.StatusNotFound {
-		_ = RenderStatus(c, http.StatusNotFound, a.Views.NotFound())
+	if ok && he.Code == http.StatusNotFound && a.Views.NotFound != nil {
+		if renderErr := RenderStatus(c, http.StatusNotFound, a.Views.NotFound()); renderErr != nil {
+			c.Logger().Error(renderErr)
+			_ = c.String(500, "Internal Server Error")
+		}
 		return
 	}
 	code := http.StatusInternalServerError
@@ -94,7 +97,14 @@ func (a *App) httpErrorHandler(err error, c echo.Context) {
 	}
 	if code >= 500 {
 		c.Logger().Errorf("server error: %v", err)
-		_ = RenderStatus(c, code, a.Views.ServerError())
+		if a.Views.ServerError != nil {
+			if renderErr := RenderStatus(c, code, a.Views.ServerError()); renderErr == nil {
+				return
+			} else {
+				c.Logger().Error(renderErr)
+			}
+		}
+		_ = c.String(code, "Internal Server Error")
 		return
 	}
 	a.Echo.DefaultHTTPErrorHandler(err, c)

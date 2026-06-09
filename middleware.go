@@ -1,6 +1,8 @@
 package pubengine
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"strings"
 
@@ -23,7 +25,7 @@ func (a *App) setupMiddleware() {
 
 	e.HTTPErrorHandler = a.httpErrorHandler
 
-	e.Pre(middleware.NonWWWRedirect())
+	e.Pre(cacheControlMiddleware, requestBodyLimits, middleware.NonWWWRedirect())
 
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogStatus:  true,
@@ -76,8 +78,8 @@ func (a *App) setupMiddleware() {
 		},
 	}))
 
-	e.Use(middleware.AddTrailingSlashWithConfig(middleware.TrailingSlashConfig{
-		RedirectCode: http.StatusMovedPermanently,
+	e.Pre(middleware.AddTrailingSlashWithConfig(middleware.TrailingSlashConfig{
+		RedirectCode: http.StatusPermanentRedirect,
 		Skipper: func(c echo.Context) bool {
 			path := c.Request().URL.Path
 			return strings.HasPrefix(path, "/public") ||
@@ -86,26 +88,29 @@ func (a *App) setupMiddleware() {
 				strings.HasPrefix(path, "/admin/analytics/api/") ||
 				strings.HasPrefix(path, "/admin/analytics/fragments/") ||
 				path == "/admin/auth/google/callback" ||
-				path == "/sitemap.xml" || path == "/feed.xml" || path == "/robots.txt"
+				path == "/favicon.svg" || path == "/sitemap.xml" || path == "/feed.xml" || path == "/robots.txt" ||
+				path == "/llms.txt"
 		},
 	}))
 
-	e.Use(cacheControlMiddleware)
 }
 
 func cacheControlMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		path := c.Request().URL.Path
-		switch {
-		case strings.HasPrefix(path, "/public/"):
-			c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		case path == "/sitemap.xml" || path == "/feed.xml" || path == "/robots.txt":
-			c.Response().Header().Set("Cache-Control", "public, max-age=86400")
-		case strings.HasPrefix(path, "/admin"):
-			c.Response().Header().Set("Cache-Control", "no-store")
-		default:
-			c.Response().Header().Set("Cache-Control", "public, max-age=3600")
-		}
+		c.Response().Before(func() {
+			path := c.Request().URL.Path
+			status := c.Response().Status
+			switch {
+			case status >= 400, c.Request().Method != http.MethodGet && c.Request().Method != http.MethodHead,
+				strings.HasPrefix(path, "/admin"), strings.HasPrefix(path, "/api/"):
+				c.Response().Header().Set("Cache-Control", "no-store")
+			case path == "/llms.txt":
+				c.Response().Header().Set("Cache-Control", "public, max-age=86400")
+			default:
+				// Stable asset URLs and published content must revalidate after changes.
+				c.Response().Header().Set("Cache-Control", "public, max-age=0, must-revalidate")
+			}
+		})
 		return next(c)
 	}
 }
@@ -150,4 +155,41 @@ func clearAdminSession(c echo.Context) error {
 func CsrfToken(c echo.Context) string {
 	token, _ := c.Get(middleware.DefaultCSRFConfig.ContextKey).(string)
 	return token
+}
+
+// Read bounded framework bodies before CSRF can parse forms or multipart data.
+func requestBodyLimits(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		req := c.Request()
+		if req.Body == nil || req.Body == http.NoBody {
+			return next(c)
+		}
+		path := strings.TrimSuffix(req.URL.Path, "/")
+		var limit int64
+		switch {
+		case path == "/admin/images/upload":
+			limit = maxUploadSize + (1 << 20)
+		case path == "/admin/login":
+			limit = 16 << 10
+		case strings.HasPrefix(path, "/admin"):
+			limit = 2 << 20
+		case path == "/api/analytics/collect":
+			limit = 16 << 10
+		default:
+			return next(c)
+		}
+		if req.ContentLength > limit {
+			return echo.ErrStatusRequestEntityTooLarge
+		}
+		body, err := io.ReadAll(io.LimitReader(req.Body, limit+1))
+		req.Body.Close()
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body").SetInternal(err)
+		}
+		if int64(len(body)) > limit {
+			return echo.ErrStatusRequestEntityTooLarge
+		}
+		req.Body = io.NopCloser(bytes.NewReader(body))
+		return next(c)
+	}
 }
