@@ -22,10 +22,7 @@ templ Home(posts []pubengine.BlogPost, activeTag string, tags []string, siteURL 
 
 // HomePartial renders the home page content for talkDOM partial updates.
 templ HomePartial(posts []pubengine.BlogPost, activeTag string, tags []string, siteURL string) {
-	<title>{{.SiteName}}</title>
-	<main id="content" receiver="content" class="max-w-3xl mx-auto px-4 py-8">
-		@BlogSection(posts, activeTag, tags)
-	</main>
+	@Home(posts, activeTag, tags, siteURL)
 }
 
 // BlogSection renders the blog post listing with tag filter.

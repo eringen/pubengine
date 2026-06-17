@@ -36,7 +36,9 @@
   }
 
   function findReceivers(name) {
-    return document.querySelectorAll('[receiver~="' + name + '"]');
+    return Array.from(document.querySelectorAll('[receiver]')).filter(function (el) {
+      return el.getAttribute('receiver').split(/\s+/).includes(name);
+    });
   }
 
   function accepts(el, op) {
@@ -76,13 +78,24 @@
       console.error(receiverName(el) + " does not accept " + op);
       return;
     }
+    if (op === "outer" && receiverName(el) === "content") {
+      var page = new DOMParser().parseFromString(content, "text/html");
+      var main = page.querySelector('[receiver~="content"]');
+      if (main) {
+        content = main.outerHTML;
+        var selectors = 'title,meta[name="description"],meta[property^="og:"],link[rel="canonical"],script[type="application/ld+json"]';
+        document.querySelectorAll(selectors).forEach(function (node) { node.remove(); });
+        page.querySelectorAll(selectors).forEach(function (node) { document.head.appendChild(node.cloneNode(true)); });
+      }
+    }
+    var name = recName(el);
     switch (op) {
       case "inner": el.innerHTML = content; break;
       case "text": el.textContent = content; break;
-      case "append": el.innerHTML += content; break;
+      case "append": el.insertAdjacentHTML("beforeend", content); break;
       case "outer": el.outerHTML = content; break;
     }
-    persist(el, op);
+    persist(op === "outer" ? (findReceivers(name)[0] || el) : el, op);
   }
 
   function csrfToken() {
@@ -90,31 +103,39 @@
     return meta ? meta.getAttribute("content") : "";
   }
 
+  var requests = new Map();
+
   function request(method, url, receiver) {
-    var headers = {
-      "X-TalkDOM-Request": "true",
-      "X-TalkDOM-Current-URL": location.href,
-    };
-    if (receiver) {
-      headers["X-TalkDOM-Receiver"] = receiver;
-    }
+    var previous = requests.get(receiver);
+    if (previous) previous.abort();
+    var controller = new AbortController();
+    requests.set(receiver, controller);
+    var headers = { "X-TalkDOM-Request": "true", "X-TalkDOM-Current-URL": location.href };
+    if (receiver) headers["X-TalkDOM-Receiver"] = receiver;
     if (method !== "GET") {
       var token = csrfToken();
       if (token) headers["X-CSRF-Token"] = token;
     }
-    return fetch(url, { method: method, headers: headers }).then(function (r) {
-      if (!r.ok) {
-        console.error("talkDOM: " + method + " " + url + " " + r.status);
-        return Promise.reject(r.status);
+    return fetch(url, { method: method, headers: headers, signal: controller.signal }).then(async function (r) {
+      if (r.redirected && new URL(r.url, location.href).pathname === "/admin/") {
+        location.assign(r.url);
+        throw new Error("Authentication required");
       }
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      var text = await r.text();
+      if (controller.signal.aborted || requests.get(receiver) !== controller) throw new Error("Superseded request");
       var trigger = r.headers.get("X-TalkDOM-Trigger");
-      return r.text().then(function (text) {
-        if (trigger) dispatchRaw(trigger);
-        return text;
-      });
-    }, function (err) {
-      console.error("talkDOM: " + method + " " + url + " failed", err);
-      return Promise.reject(err);
+      if (trigger) dispatchRaw(trigger);
+      return text;
+    }).finally(function () {
+      if (requests.get(receiver) === controller) requests.delete(receiver);
+    });
+  }
+
+  function requestApply(method, el, url, op) {
+    var name = recName(el);
+    return request(method, url, name).then(function (text) {
+      findReceivers(name).forEach(function (target) { apply(target, op, text); });
     });
   }
 
@@ -129,13 +150,11 @@
     "delete:": function (el, url) { return request("DELETE", url, recName(el)); },
     "confirm:": function (el, message) { if (!confirm(message)) return Promise.reject(); },
     "apply:": function (el, content, op) { apply(el, op, content); },
-    "get:apply:": function (el, url, op) { return request("GET", url, recName(el)).then(function (t) { apply(el, op, t); }); },
-    "post:apply:": function (el, url, op) { return request("POST", url, recName(el)).then(function (t) { apply(el, op, t); }); },
-    "put:apply:": function (el, url, op) { return request("PUT", url, recName(el)).then(function (t) { apply(el, op, t); }); },
-    "delete:apply:": function (el, url, op) { return request("DELETE", url, recName(el)).then(function (t) { apply(el, op, t); }); },
+    "get:apply:": function (el, url, op) { return requestApply("GET", el, url, op); },
+    "post:apply:": function (el, url, op) { return requestApply("POST", el, url, op); },
+    "put:apply:": function (el, url, op) { return requestApply("PUT", el, url, op); },
+    "delete:apply:": function (el, url, op) { return requestApply("DELETE", el, url, op); },
   };
-
-  var pushing = false;
 
   function pushUrl(senderEl, raw) {
     if (!senderEl.hasAttribute("push-url")) return;
@@ -145,41 +164,44 @@
       url = firstMsg.args[0] || "";
     }
     if (url && (location.pathname + location.search) !== url) {
-      history.pushState({ sender: raw }, "", url);
+      history.pushState({ sender: raw, url: url }, "", url);
     }
+  }
+
+  function completed(raw) {
+    var receiver = parseMessage(raw.split(";")[0].split("|")[0]).receiver;
+    var target = findReceivers(receiver)[0];
+    if (target) target.dispatchEvent(new CustomEvent("talkdom:done", { bubbles: true, detail: { receiver: receiver, url: location.href } }));
   }
 
   function replayState(state) {
-    if (!state || !state.sender) return;
-    pushing = true;
-    dispatchRaw(state.sender);
-    pushing = false;
+    if (!state || !state.sender) { location.reload(); return; }
+    run(state.sender, true).then(function () { completed(state.sender); }).catch(function () { location.reload(); });
   }
 
-  window.addEventListener("popstate", function (e) {
-    replayState(e.state);
-  });
+  window.addEventListener("popstate", function (e) { replayState(e.state); });
 
-  function send(msg, piped) {
+  function send(msg, piped, silent) {
     var els = findReceivers(msg.receiver);
     if (els.length === 0) {
-      console.error(msg.receiver + " not found");
-      return;
+      return Promise.reject(new Error(msg.receiver + " not found"));
     }
     var method = methods[msg.selector];
     if (!method) {
-      console.error(msg.receiver + " does not understand " + msg.selector);
-      return;
+      return Promise.reject(new Error("Unknown command " + msg.selector));
     }
     var args = piped !== undefined ? [piped].concat(msg.args) : msg.args;
     var detail = { receiver: msg.receiver, selector: msg.selector, args: msg.args };
     var result;
+    if (/^(get|post|put|delete):/.test(msg.selector)) els = Array.from(els).slice(0, 1);
+    var results = [];
     els.forEach(function (el) {
-      result = method(el, ...args);
+      result = Promise.resolve().then(function () { return method(el, ...args); });
+      results.push(result);
       if (result && typeof result.then === "function") {
         result.then(function () {
           var target = el.isConnected ? el : findReceivers(msg.receiver)[0];
-          if (target) target.dispatchEvent(new CustomEvent("talkdom:done", { bubbles: true, detail: detail }));
+          if (target && !silent) target.dispatchEvent(new CustomEvent("talkdom:done", { bubbles: true, detail: detail }));
         }, function (err) {
           detail.error = err;
           var target = el.isConnected ? el : findReceivers(msg.receiver)[0];
@@ -190,21 +212,21 @@
         if (target) target.dispatchEvent(new CustomEvent("talkdom:done", { bubbles: true, detail: detail }));
       }
     });
-    return result;
+    return Promise.all(results).then(function (values) { return values[values.length - 1]; });
   }
 
-  function run(raw) {
+  function run(raw, silent) {
     var chains = raw.split(";").map(function (chain) {
       var trimmed = chain.trim();
       if (!trimmed) return Promise.resolve();
       var steps = trimmed.split("|").map(function (s) { return s.trim(); }).filter(Boolean);
       if (steps.length === 1) {
-        return Promise.resolve(send(parseMessage(steps[0])));
+        return Promise.resolve(send(parseMessage(steps[0]), undefined, silent));
       }
       return steps.reduce(function (prev, step) {
         var msg = parseMessage(step);
         return Promise.resolve(prev).then(function (piped) {
-          return send(msg, piped);
+          return send(msg, piped, silent);
         });
       }, undefined);
     });
@@ -217,8 +239,10 @@
 
   function dispatch(senderEl) {
     var raw = senderEl.getAttribute("sender");
-    dispatchRaw(raw);
-    if (!pushing) pushUrl(senderEl, raw);
+    run(raw, true).then(function () {
+      pushUrl(senderEl, raw);
+      completed(raw);
+    }).catch(function () {});
   }
 
   function parseInterval(str) {
@@ -255,15 +279,21 @@
 
   document.addEventListener("click", function (e) {
     const sender = e.target.closest("[sender]");
-    if (sender) {
+    if (sender && !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && (!e.button || e.button === 0) && !sender.hasAttribute("download") && (!sender.getAttribute("target") || sender.getAttribute("target") === "_self")) {
       e.preventDefault();
       dispatch(sender);
     }
   });
 
-  restore();
-  replayState(history.state);
-  document.querySelectorAll("[receiver]").forEach(startPolling);
+  function initialize() {
+    try { restore(); } catch (_) {}
+    if (!history.state || !history.state.sender) {
+      history.replaceState({ sender: "content get: " + location.pathname + location.search + " apply: outer", url: location.href }, "", location.href);
+    }
+    document.querySelectorAll("[receiver]").forEach(startPolling);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initialize);
+  else initialize();
 
   window.talkDOM = { methods: methods, send: run };
 

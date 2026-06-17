@@ -8,7 +8,7 @@ templ Layout(title string, activeTab string) {
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 			<title>{ title }</title>
-			<script src="/public/talkdom.js"></script>
+			<script src="/public/talkdom.js" defer></script>
 			<link rel="stylesheet" href="/public/tailwind.css"/>
 			<link rel="stylesheet" href="/public/admin.css"/>
 		</head>
@@ -96,5 +96,5 @@ templ ContentContainer() {
 			<p class="mt-2 text-gray-600">Loading...</p>
 		</div>
 	</div>
-	<script src="/public/dashboard.min.js"></script>
+	<script src="/public/dashboard.min.js" defer></script>
 }

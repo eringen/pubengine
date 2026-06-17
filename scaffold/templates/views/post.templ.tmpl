@@ -28,10 +28,7 @@ templ Post(post pubengine.BlogPost, posts []pubengine.BlogPost, siteURL string) 
 
 // PostPartial renders the post content for talkDOM partial updates.
 templ PostPartial(post pubengine.BlogPost, posts []pubengine.BlogPost, siteURL string) {
-	<title>{ post.Title } | {{.SiteName}}</title>
-	<main id="content" receiver="content" class="max-w-3xl mx-auto px-4 py-8">
-		@postContent(post, posts)
-	</main>
+	@Post(post, posts, siteURL)
 }
 
 templ postContent(post pubengine.BlogPost, posts []pubengine.BlogPost) {
