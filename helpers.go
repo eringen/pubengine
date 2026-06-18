@@ -120,6 +120,9 @@ func PathEscape(s string) string {
 	return url.PathEscape(s)
 }
 
+// QueryEscape escapes a value for a URL query parameter.
+func QueryEscape(s string) string { return url.QueryEscape(s) }
+
 // WebsiteJsonLD returns a JSON-LD string for a WebSite schema using SiteConfig.
 func WebsiteJsonLD(cfg SiteConfig) string {
 	data := map[string]interface{}{

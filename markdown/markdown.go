@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/a-h/templ"
@@ -21,7 +20,7 @@ var (
 	reItalicUnderscore = regexp.MustCompile(`_([^_]+)_`)
 	reInlineCode       = regexp.MustCompile("`([^`]+)`")
 	reLink             = regexp.MustCompile(`\[(.*?)\]\((.*?)\)(\^)?`)
-	reOrderedList = regexp.MustCompile(`^(\d+)\.\s`)
+	reOrderedList      = regexp.MustCompile(`^(\d+)\.\s`)
 	// ![alt](url){style} or ![alt](url){style|width|height}
 	reImg = regexp.MustCompile(`\!\[(.*?)\]\((.*?)\)\{([^|}]*?)(?:\|(\d+)\|(\d+))?\}`)
 )
@@ -105,6 +104,7 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 				flushList()
 				flushOrderedList()
 				flushQuote()
+				flushTable()
 				lang := strings.TrimSpace(line[3:])
 				if lang != "" {
 					codeLang = true
@@ -115,7 +115,6 @@ func RenderMarkdown(buf *bytes.Buffer, md string) {
 					buf.WriteString("<pre class=\"code-block\"><code>")
 				}
 				inCode = true
-				inPara = true
 			}
 			continue
 		}
@@ -310,75 +309,61 @@ func ApplyOutsideTags(s string, fn func(string) string) string {
 }
 
 // FormatInline applies inline formatting (bold, italic, links, images) to s.
+var reInlineToken = regexp.MustCompile(reInlineCode.String() + "|" + reImg.String() + "|" + reLink.String())
+
 func FormatInline(s string, imageCount *int) string {
-	escaped := html.EscapeString(s)
-	// ![alt](url){style} or ![alt](url){style|width|height}
-	escaped = reImg.ReplaceAllStringFunc(escaped, func(m string) string {
-		match := reImg.FindStringSubmatch(m)
-		if len(match) < 4 {
-			return m
+	var out strings.Builder
+	offset := 0
+	for _, loc := range reInlineToken.FindAllStringIndex(s, -1) {
+		out.WriteString(formatText(s[offset:loc[0]]))
+		token := s[loc[0]:loc[1]]
+		switch {
+		case strings.HasPrefix(token, "`"):
+			out.WriteString("<code>" + html.EscapeString(token[1:len(token)-1]) + "</code>")
+		case strings.HasPrefix(token, "!["):
+			match := reImg.FindStringSubmatch(token)
+			src := SafeURL(match[2])
+			alt := html.EscapeString(match[1])
+			if src == "" {
+				out.WriteString(alt)
+				break
+			}
+			width, height := "1024", "768"
+			if match[4] != "" && match[5] != "" {
+				width, height = match[4], match[5]
+			}
+			*imageCount++
+			load := `loading="eager"`
+			if *imageCount == 1 {
+				load = `fetchpriority="high"`
+			}
+			out.WriteString(`<img ` + load + ` width="` + width + `" height="` + height + `" alt="` + alt + `" src="` + src + `" style="` + html.EscapeString(match[3]) + `" decoding="async"/>`)
+		default:
+			match := reLink.FindStringSubmatch(token)
+			href := SafeURL(match[2])
+			label := formatText(match[1])
+			if href == "" {
+				out.WriteString(label)
+				break
+			}
+			attrs := `class="underline decoration-2 underline-offset-4"`
+			if match[3] == "^" {
+				attrs += ` target="_blank" rel="noopener noreferrer"`
+			}
+			out.WriteString(`<a href="` + href + `" ` + attrs + `>` + label + `</a>`)
 		}
-		src := SafeURL(match[2])
-		if src == "" {
-			return match[1]
-		}
-
-		alt := match[1]
-		style := match[3]
-		width := "1024"
-		height := "768"
-		if len(match) >= 6 && match[4] != "" && match[5] != "" {
-			width = match[4]
-			height = match[5]
-		}
-
-		*imageCount++
-		var loadAttr string
-		if *imageCount == 1 {
-			loadAttr = `fetchpriority="high"`
-		} else {
-			loadAttr = `loading="eager"`
-		}
-
-		return `<img ` + loadAttr + ` width="` + width + `" height="` + height + `" alt="` + alt + `" src="` + src + `" style="` + style + `" decoding="async"/>`
-	})
-	escaped = reLink.ReplaceAllStringFunc(escaped, func(m string) string {
-		match := reLink.FindStringSubmatch(m)
-		if len(match) < 3 {
-			return m
-		}
-		href := SafeURL(match[2])
-		if href == "" {
-			return match[1]
-		}
-		attrs := `class="underline decoration-2 underline-offset-4"`
-		if len(match) >= 4 && match[3] == "^" {
-			attrs += ` target="_blank" rel="noopener noreferrer"`
-		}
-		return `<a href="` + href + `" ` + attrs + `>` + match[1] + `</a>`
-	})
-	// Inline code: extract and replace with placeholders so bold/italic
-	// regex does not format content inside backticks.
-	var inlineCodeBlocks []string
-	escaped = reInlineCode.ReplaceAllStringFunc(escaped, func(m string) string {
-		match := reInlineCode.FindStringSubmatch(m)
-		placeholder := "\x00IC" + strconv.Itoa(len(inlineCodeBlocks)) + "\x00"
-		inlineCodeBlocks = append(inlineCodeBlocks, "<code>"+match[1]+"</code>")
-		return placeholder
-	})
-	// Apply bold/italic only outside HTML tags so URLs in href are not corrupted
-	escaped = ApplyOutsideTags(escaped, func(seg string) string {
-		seg = reBold.ReplaceAllString(seg, "<strong>$1</strong>")
-		seg = reBoldUnderscore.ReplaceAllString(seg, "<strong>$1</strong>")
-		seg = reItalic.ReplaceAllString(seg, "<em>$1</em>")
-		seg = reItalicUnderscore.ReplaceAllString(seg, "<em>$1</em>")
-		return seg
-	})
-	// Restore inline code blocks
-	for i, code := range inlineCodeBlocks {
-		escaped = strings.Replace(escaped, "\x00IC"+strconv.Itoa(i)+"\x00", code, 1)
+		offset = loc[1]
 	}
-	return escaped
+	out.WriteString(formatText(s[offset:]))
+	return out.String()
+}
+
+func formatText(s string) string {
+	s = html.EscapeString(s)
+	s = reBold.ReplaceAllString(s, "<strong>$1</strong>")
+	s = reBoldUnderscore.ReplaceAllString(s, "<strong>$1</strong>")
+	s = reItalic.ReplaceAllString(s, "<em>$1</em>")
+	return reItalicUnderscore.ReplaceAllString(s, "<em>$1</em>")
 }
 
 // SafeURL validates and sanitizes a URL for use in HTML attributes.

@@ -43,7 +43,7 @@ templ postContent(post pubengine.BlogPost, posts []pubengine.BlogPost) {
 				<div class="mt-2 flex gap-2">
 					for _, tag := range post.Tags {
 						<a
-							href={ templ.SafeURL("/?tag=" + pubengine.PathEscape(tag)) }
+							href={ templ.SafeURL("/?tag=" + pubengine.QueryEscape(tag)) }
 							class="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-600 hover:bg-gray-200"
 						>
 							{ tag }

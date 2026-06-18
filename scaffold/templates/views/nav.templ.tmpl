@@ -1,6 +1,7 @@
 package views
 
 import "github.com/eringen/pubengine"
+import "encoding/json"
 
 // Head renders the standard HTML <head> with meta tags and asset links.
 templ Head(siteName string) {
@@ -12,6 +13,7 @@ templ Head(siteName string) {
 		<link rel="stylesheet" href="/public/tailwind.css"/>
 		<script src="/public/talkdom.js"></script>
 		<script src="/public/analytics.js" defer></script>
+		<script src="/public/app.min.js" defer></script>
 	</head>
 }
 
@@ -39,6 +41,7 @@ templ HeadWithMeta(meta pubengine.PageMeta, siteName string) {
 		<link rel="stylesheet" href="/public/tailwind.css"/>
 		<script src="/public/talkdom.js"></script>
 		<script src="/public/analytics.js" defer></script>
+		<script src="/public/app.min.js" defer></script>
 	</head>
 }
 
@@ -68,8 +71,6 @@ templ Footer(siteName string) {
 
 // JsonLD renders a JSON-LD script tag.
 templ JsonLD(data string) {
-	<script type="application/ld+json">
-		{ data }
-	</script>
+	@templ.JSONScript("", json.RawMessage(data)).WithType("application/ld+json")
 }
 

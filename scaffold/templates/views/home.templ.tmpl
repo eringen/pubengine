@@ -47,9 +47,9 @@ templ BlogSection(posts []pubengine.BlogPost, activeTag string, tags []string) {
 				</a>
 				for _, tag := range tags {
 					<a
-						href={ templ.SafeURL("/?tag=" + pubengine.PathEscape(tag)) }
-						sender={ "blogSection get: /?tag=" + pubengine.PathEscape(tag) + "&partial=blog apply: outer" }
-						push-url={ "/?tag=" + pubengine.PathEscape(tag) }
+						href={ templ.SafeURL("/?tag=" + pubengine.QueryEscape(tag)) }
+						sender={ "blogSection get: /?tag=" + pubengine.QueryEscape(tag) + "&partial=blog apply: outer" }
+						push-url={ "/?tag=" + pubengine.QueryEscape(tag) }
 						if tag == activeTag {
 							class="px-3 py-1 text-sm rounded-full bg-gray-900 text-white"
 						} else {
