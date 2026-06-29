@@ -461,7 +461,7 @@ func generateSessionID(visitorID string) string {
 
 // RegisterRoutes registers analytics routes with the Echo router.
 func (h *Handler) RegisterRoutes(e *echo.Echo, publicGroup *echo.Group, authMiddleware echo.MiddlewareFunc) {
-	// Public endpoint for collecting analytics (with CORS)
+	// Collection is same-origin; cross-origin requests are not enabled.
 	publicGroup.POST("/api/analytics/collect", h.Collect)
 
 	// Admin API endpoints (JSON)

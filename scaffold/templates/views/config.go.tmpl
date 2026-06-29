@@ -1,0 +1,37 @@
+package views
+
+import (
+ "context"
+ "io"
+ "github.com/a-h/templ"
+ "github.com/eringen/pubengine"
+)
+
+type siteKey struct{}
+
+func siteConfig(ctx context.Context) pubengine.SiteConfig {
+ if cfg, ok := ctx.Value(siteKey{}).(pubengine.SiteConfig); ok { return cfg }
+ return pubengine.SiteConfig{Name: "{{.SiteName}}", URL: "http://localhost:3000"}
+}
+
+// New binds site settings to each rendered component.
+func New(cfg pubengine.SiteConfig) pubengine.ViewFuncs {
+ wrap := func(component templ.Component) templ.Component {
+  return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
+   return component.Render(context.WithValue(ctx, siteKey{}, cfg), w)
+  })
+ }
+ return pubengine.ViewFuncs{
+  Home: func(p []pubengine.BlogPost, tag string, tags []string, url string) templ.Component { return wrap(Home(p,tag,tags,url)) },
+  HomePartial: func(p []pubengine.BlogPost, tag string, tags []string, url string) templ.Component { return wrap(HomePartial(p,tag,tags,url)) },
+  BlogSection: func(p []pubengine.BlogPost, tag string, tags []string) templ.Component { return wrap(BlogSection(p,tag,tags)) },
+  Post: func(p pubengine.BlogPost, posts []pubengine.BlogPost, url string) templ.Component { return wrap(Post(p,posts,url)) },
+  PostPartial: func(p pubengine.BlogPost, posts []pubengine.BlogPost, url string) templ.Component { return wrap(PostPartial(p,posts,url)) },
+  AdminLogin: func(msg,csrf,url string) templ.Component { return wrap(AdminLogin(msg,csrf,url)) },
+  AdminDashboard: func(p []pubengine.BlogPost,msg,csrf string) templ.Component { return wrap(AdminDashboard(p,msg,csrf)) },
+  AdminFormPartial: func(p pubengine.BlogPost,csrf string) templ.Component { return wrap(AdminFormPartial(p,csrf)) },
+  AdminImages: func(p []pubengine.Image,csrf string) templ.Component { return wrap(AdminImages(p,csrf)) },
+  NotFound: func() templ.Component { return wrap(NotFound()) },
+  ServerError: func() templ.Component { return wrap(ServerError()) },
+ }
+}

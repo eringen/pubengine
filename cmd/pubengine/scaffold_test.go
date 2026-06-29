@@ -83,4 +83,13 @@ func TestStructuredData(t *testing.T){
  var walk func(*html.Node);walk=func(n *html.Node){if n.Type==html.ElementNode&&n.Data=="script"{count++;if n.FirstChild==nil{t.Fatal("empty JSON")};var value map[string]any;if err:=json.Unmarshal([]byte(n.FirstChild.Data),&value);err!=nil{t.Fatal(err)};if value["name"]!=name||value["@type"]!="WebSite"{t.Fatal(value)}};for c:=n.FirstChild;c!=nil;c=c.NextSibling{walk(c)}};walk(doc);if count!=1{t.Fatal(count)}
 }
 func TestEditorKeepsRevisionAndErrors(t *testing.T){var b bytes.Buffer;p:=pubengine.BlogPost{OriginalSlug:"old",Slug:"new",Revision:3,Content:"unsaved text",Error:"Conflict"};if err:=AdminFormPartial(p,"csrf").Render(context.Background(),&b);err!=nil{t.Fatal(err)};for _,want:=range []string{"original_slug","revision","unsaved text","Conflict"}{if !strings.Contains(b.String(),want){t.Fatal(want)}}}
+func TestRuntimeMetadata(t *testing.T){
+ cfg:=pubengine.SiteConfig{Name:"Runtime name",URL:"https://runtime.test",Description:"Runtime description",Author:"Runtime author"}
+ views:=New(cfg); p:=pubengine.BlogPost{Title:"Post",Slug:"post",Summary:"Summary",Content:"Body"}
+ var full,partial bytes.Buffer
+ if err:=views.Post(p,nil,cfg.URL).Render(context.Background(),&full);err!=nil{t.Fatal(err)}
+ if err:=views.PostPartial(p,nil,cfg.URL).Render(context.Background(),&partial);err!=nil{t.Fatal(err)}
+ if full.String()!=partial.String(){t.Fatal("partial metadata differs")}
+ for _,want:=range []string{cfg.Name,cfg.Author,"https://runtime.test/blog/post/"}{if !strings.Contains(full.String(),want){t.Fatal(want)}}
+}
 `

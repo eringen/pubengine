@@ -14,14 +14,14 @@ templ Post(post pubengine.BlogPost, posts []pubengine.BlogPost, siteURL string) 
 			Description: post.Summary,
 			URL:         pubengine.BuildURL(siteURL, "blog", post.Slug),
 			OGType:      "article",
-		}, "{{.SiteName}}")
+		}, siteConfig(ctx).Name)
 		<body class="min-h-screen bg-white text-gray-900">
-			@Nav("{{.SiteName}}")
+			@Nav(siteConfig(ctx).Name)
 			<main id="content" receiver="content" class="max-w-3xl mx-auto px-4 py-8">
 				@postContent(post, posts)
 			</main>
-			@Footer("{{.SiteName}}")
-			@JsonLD(pubengine.BlogPostingJsonLD(post, pubengine.SiteConfig{Name: "{{.SiteName}}", URL: siteURL}))
+			@Footer(siteConfig(ctx).Name)
+			@JsonLD(pubengine.BlogPostingJsonLD(post, siteConfig(ctx)))
 		</body>
 	</html>
 }

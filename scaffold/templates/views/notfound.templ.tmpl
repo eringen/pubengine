@@ -4,7 +4,7 @@ package views
 templ NotFound() {
 	<!DOCTYPE html>
 	<html lang="en" class="bg-white">
-		@Head("Not Found | {{.SiteName}}")
+		@Head("Not Found | " + siteConfig(ctx).Name)
 		<body class="min-h-screen bg-white text-gray-900 flex items-center justify-center">
 			<div class="text-center">
 				<h1 class="text-6xl font-bold mb-4">404</h1>

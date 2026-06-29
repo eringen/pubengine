@@ -10,7 +10,7 @@ import (
 templ AdminLogin(errorMsg string, csrfToken string, googleLoginURL string) {
 	<!DOCTYPE html>
 	<html lang="en" class="bg-white">
-		@Head("Admin | {{.SiteName}}")
+		@Head("Admin | " + siteConfig(ctx).Name)
 		<body class="min-h-screen bg-white text-gray-900 flex items-center justify-center">
 			<div class="w-full max-w-sm mx-auto p-6">
 				<h1 class="text-2xl font-bold mb-6 text-center">Admin Login</h1>
@@ -72,12 +72,12 @@ templ AdminLogin(errorMsg string, csrfToken string, googleLoginURL string) {
 templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken string) {
 	<!DOCTYPE html>
 	<html lang="en" class="bg-white">
-		@Head("Dashboard | {{.SiteName}}")
+		@Head("Dashboard | " + siteConfig(ctx).Name)
 		<body class="min-h-screen bg-white text-gray-900">
 			<meta name="csrf-token" content={ csrfToken }/>
 			<nav class="border-b border-gray-200 bg-white">
 				<div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-					<a href="/admin/" class="text-lg font-bold">{{.SiteName}} Admin</a>
+					<a href="/admin/" class="text-lg font-bold">{ siteConfig(ctx).Name } Admin</a>
 					<div class="flex items-center gap-4">
 						<a href="/admin/analytics/" class="text-sm text-gray-600 hover:text-gray-900">Analytics</a>
 						<a href="/" class="text-sm text-gray-600 hover:text-gray-900">View Site</a>
