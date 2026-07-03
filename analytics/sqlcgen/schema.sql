@@ -3,6 +3,7 @@
 
 CREATE TABLE visits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    page_view_id TEXT,
     visitor_id TEXT NOT NULL,
     session_id TEXT NOT NULL,
     ip_hash TEXT NOT NULL,
@@ -18,6 +19,7 @@ CREATE TABLE visits (
 
 CREATE TABLE bot_visits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    page_view_id TEXT,
     bot_name TEXT NOT NULL,
     ip_hash TEXT NOT NULL,
     user_agent TEXT NOT NULL,
@@ -29,3 +31,6 @@ CREATE TABLE settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE UNIQUE INDEX idx_visits_page_view ON visits(visitor_id,page_view_id);
+CREATE UNIQUE INDEX idx_bot_page_view ON bot_visits(ip_hash,page_view_id);

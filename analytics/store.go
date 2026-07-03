@@ -14,8 +14,10 @@ import (
 
 // Store provides database operations for analytics.
 type Store struct {
-	db *sql.DB
-	q  *sqlcgen.Queries
+	db     *sql.DB
+	q      *sqlcgen.Queries
+	saltMu sync.RWMutex
+	salt   string
 }
 
 // NewStore creates a new analytics store.
@@ -38,6 +40,10 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
+	if err := InitSalt(s); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("initialize salt: %w", err)
+	}
 	return s, nil
 }
 
@@ -92,28 +98,67 @@ func (s *Store) ensureSchema() error {
 }
 
 // currentSchemaVersion is the latest schema version. Increment when adding migrations.
-const currentSchemaVersion = 1
+const currentSchemaVersion = 3
 
 // migrate applies incremental schema migrations based on a version stored in the settings table.
 func (s *Store) migrate() error {
-	verStr, err := s.GetSetting("schema_version")
+	tx, err := s.db.Begin()
 	if err != nil {
-		return fmt.Errorf("read schema version: %w", err)
+		return err
 	}
-
+	defer tx.Rollback()
+	var verStr string
+	err = tx.QueryRow("SELECT value FROM settings WHERE key='schema_version'").Scan(&verStr)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
 	version := 0
 	if verStr != "" {
 		version, err = strconv.Atoi(verStr)
 		if err != nil {
-			return fmt.Errorf("parse schema version %q: %w", verStr, err)
+			return err
 		}
 	}
-
-	if version < 1 {
-		version = 1
+	if version > currentSchemaVersion || version < 0 {
+		return fmt.Errorf("unsupported analytics schema version %d", version)
 	}
-
-	return s.SetSetting("schema_version", strconv.Itoa(version))
+	if version < 2 {
+		rows, err := tx.Query("SELECT DISTINCT referrer FROM visits")
+		if err != nil {
+			return err
+		}
+		var refs []sql.NullString
+		for rows.Next() {
+			var ref sql.NullString
+			if err := rows.Scan(&ref); err != nil {
+				rows.Close()
+				return err
+			}
+			refs = append(refs, ref)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		for _, ref := range refs {
+			if _, err := tx.Exec("UPDATE visits SET referrer=? WHERE referrer IS ?", CleanReferrer(ref.String), ref); err != nil {
+				return err
+			}
+		}
+	}
+	if version < 3 {
+		if _, err := tx.Exec(`ALTER TABLE visits ADD COLUMN page_view_id TEXT;
+   CREATE UNIQUE INDEX idx_visits_page_view ON visits(visitor_id,page_view_id);
+   ALTER TABLE bot_visits ADD COLUMN page_view_id TEXT;
+   CREATE UNIQUE INDEX idx_bot_page_view ON bot_visits(ip_hash,page_view_id);`); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec("INSERT INTO settings (key,value) VALUES ('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", strconv.Itoa(currentSchemaVersion)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // GetSetting retrieves a setting value by key. Returns empty string if not found.
@@ -131,16 +176,19 @@ func (s *Store) SetSetting(key, value string) error {
 }
 
 // SaveVisit stores a new visit in the database.
-func (s *Store) SaveVisit(v *Visit) error {
-	return s.q.InsertVisit(context.Background(), sqlcgen.InsertVisitParams{
+func (s *Store) SaveVisit(v *Visit) error { return s.SaveVisitContext(context.Background(), v) }
+
+func (s *Store) SaveVisitContext(ctx context.Context, v *Visit) error {
+	return s.q.InsertVisit(ctx, sqlcgen.InsertVisitParams{
 		VisitorID:   v.VisitorID,
+		PageViewID:  sql.NullString{String: v.PageViewID, Valid: v.PageViewID != ""},
 		SessionID:   v.SessionID,
 		IpHash:      v.IPHash,
 		Browser:     v.Browser,
 		Os:          v.OS,
 		Device:      v.Device,
 		Path:        v.Path,
-		Referrer:    sql.NullString{String: v.Referrer, Valid: true},
+		Referrer:    sql.NullString{String: CleanReferrer(v.Referrer), Valid: true},
 		ScreenSize:  sql.NullString{String: v.ScreenSize, Valid: true},
 		Timestamp:   v.Timestamp.UTC(),
 		DurationSec: sql.NullInt64{Int64: int64(v.DurationSec), Valid: true},
@@ -158,12 +206,17 @@ func (s *Store) UpdateVisitDuration(visitorID, path string, durationSec int) err
 
 // SaveBotVisit stores a new bot visit in the database.
 func (s *Store) SaveBotVisit(bv *BotVisit) error {
-	return s.q.InsertBotVisit(context.Background(), sqlcgen.InsertBotVisitParams{
-		BotName:   bv.BotName,
-		IpHash:    bv.IPHash,
-		UserAgent: bv.UserAgent,
-		Path:      bv.Path,
-		Timestamp: bv.Timestamp.UTC(),
+	return s.SaveBotVisitContext(context.Background(), bv)
+}
+
+func (s *Store) SaveBotVisitContext(ctx context.Context, bv *BotVisit) error {
+	return s.q.InsertBotVisit(ctx, sqlcgen.InsertBotVisitParams{
+		BotName:    bv.BotName,
+		PageViewID: sql.NullString{String: bv.PageViewID, Valid: bv.PageViewID != ""},
+		IpHash:     bv.IPHash,
+		UserAgent:  bv.UserAgent,
+		Path:       bv.Path,
+		Timestamp:  bv.Timestamp.UTC(),
 	})
 }
 
@@ -387,6 +440,9 @@ func (s *Store) GetStats(from, to time.Time, hourly, monthly bool) (*Stats, erro
 			}
 		}
 		mu.Lock()
+		if !hourly {
+			result = fillCalendarGaps(from, to, result, monthly)
+		}
 		stats.DailyViews = result
 		mu.Unlock()
 	}()
@@ -464,6 +520,9 @@ func (s *Store) GetBotStats(from, to time.Time, hourly, monthly bool) (*BotStats
 		}
 	}
 
+	if !hourly {
+		stats.DailyVisits = fillCalendarGaps(from, to, stats.DailyVisits, monthly)
+	}
 	return stats, nil
 }
 
@@ -524,4 +583,24 @@ func (s *Store) GetRealtimeVisitors() (int, error) {
 	cutoff := time.Now().UTC().Add(-5 * time.Minute)
 	count, err := s.q.CountRealtimeVisitors(context.Background(), cutoff)
 	return int(count), err
+}
+
+func fillCalendarGaps(from, to time.Time, sparse []DailyView, monthly bool) []DailyView {
+	counts := make(map[string]int, len(sparse))
+	for _, v := range sparse {
+		counts[v.Date] = v.Views
+	}
+	format := "2006-01-02"
+	step := func(t time.Time) time.Time { return t.AddDate(0, 0, 1) }
+	if monthly {
+		format = "2006-01"
+		from = time.Date(from.Year(), from.Month(), 1, 0, 0, 0, 0, time.UTC)
+		step = func(t time.Time) time.Time { return t.AddDate(0, 1, 0) }
+	}
+	result := []DailyView{}
+	for current := from; current.Before(to); current = step(current) {
+		label := current.Format(format)
+		result = append(result, DailyView{Date: label, Views: counts[label]})
+	}
+	return result
 }

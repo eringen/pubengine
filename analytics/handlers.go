@@ -3,8 +3,14 @@ package analytics
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/eringen/pubengine/analytics/templates"
@@ -28,6 +34,8 @@ func NewHandler(store *Store) *Handler {
 
 // CollectRequest is the expected request body for the collect endpoint.
 type CollectRequest struct {
+	Event       string `json:"event"`
+	PageViewID  string `json:"page_view_id"`
 	Path        string `json:"path"`
 	Referrer    string `json:"referrer"`
 	ScreenSize  string `json:"screen_size"`
@@ -45,7 +53,22 @@ const (
 )
 
 // validateCollectRequest checks field lengths and value ranges.
+var pageViewIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{16,64}$`)
+
 func validateCollectRequest(req *CollectRequest) error {
+	if req.Event != "view" && req.Event != "duration" {
+		return fmt.Errorf("invalid event type")
+	}
+	if !pageViewIDPattern.MatchString(req.PageViewID) {
+		return fmt.Errorf("invalid page view ID")
+	}
+	u, err := url.Parse(req.Path)
+	if err != nil || !strings.HasPrefix(req.Path, "/") || strings.HasPrefix(req.Path, "//") || u.IsAbs() || u.Host != "" || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("invalid page path")
+	}
+	if req.Event == "view" && req.DurationSec != 0 {
+		return fmt.Errorf("view duration must be zero")
+	}
 	if len(req.Path) > maxPathLen {
 		return fmt.Errorf("path exceeds maximum length of %d", maxPathLen)
 	}
@@ -81,8 +104,20 @@ func (h *Handler) Collect(c echo.Context) error {
 
 	// Parse request
 	var req CollectRequest
-	if err := c.Bind(&req); err != nil {
+	decoder := json.NewDecoder(http.MaxBytesReader(c.Response(), c.Request().Body, 16<<10))
+	if err := decoder.Decode(&req); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			return echo.ErrStatusRequestEntityTooLarge
+		}
 		return c.String(http.StatusBadRequest, "Invalid request")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return c.String(http.StatusBadRequest, "Invalid request")
+	}
+	if req.UserAgent == "" {
+		req.UserAgent = c.Request().UserAgent()
 	}
 
 	// Validate input
@@ -101,30 +136,25 @@ func (h *Handler) Collect(c echo.Context) error {
 
 	// Handle bot visits separately
 	if IsBot(userAgent) {
-		botVisit := &BotVisit{
-			BotName:   ExtractBotName(userAgent),
-			IPHash:    HashIP(ip),
-			UserAgent: userAgent,
-			Path:      req.Path,
-			Timestamp: time.Now().UTC(),
+		if req.Event == "duration" {
+			return c.NoContent(http.StatusNoContent)
 		}
-		if err := h.store.SaveBotVisit(botVisit); err != nil {
-			c.Logger().Errorf("Failed to save bot visit: %v", err)
+		botVisit := &BotVisit{
+			BotName:    ExtractBotName(userAgent),
+			PageViewID: req.PageViewID,
+			IPHash:     h.store.HashIP(ip),
+			UserAgent:  userAgent,
+			Path:       req.Path,
+			Timestamp:  time.Now().UTC(),
+		}
+		if err := h.store.SaveBotVisitContext(c.Request().Context(), botVisit); err != nil {
+			return err
 		}
 		return c.NoContent(http.StatusNoContent)
 	}
 
 	// Generate visitor ID
-	visitorID := GenerateVisitorID(ip, userAgent)
-
-	// If duration > 0 this is an unload beacon — update the existing visit
-	// instead of creating a duplicate row.
-	if req.DurationSec > 0 {
-		if err := h.store.UpdateVisitDuration(visitorID, req.Path, req.DurationSec); err != nil {
-			c.Logger().Errorf("Failed to update visit duration: %v", err)
-		}
-		return c.NoContent(http.StatusNoContent)
-	}
+	visitorID := h.store.GenerateVisitorID(ip, userAgent)
 
 	// Parse browser, OS, device
 	browser, os, device := ParseUserAgent(userAgent)
@@ -135,8 +165,9 @@ func (h *Handler) Collect(c echo.Context) error {
 	// Create visit
 	visit := &Visit{
 		VisitorID:   visitorID,
+		PageViewID:  req.PageViewID,
 		SessionID:   generateSessionID(visitorID),
-		IPHash:      HashIP(ip),
+		IPHash:      h.store.HashIP(ip),
 		Browser:     browser,
 		OS:          os,
 		Device:      device,
@@ -148,8 +179,8 @@ func (h *Handler) Collect(c echo.Context) error {
 	}
 
 	// Save to database
-	if err := h.store.SaveVisit(visit); err != nil {
-		c.Logger().Errorf("Failed to save visit: %v", err)
+	if err := h.store.SaveVisitContext(c.Request().Context(), visit); err != nil {
+		return err
 	}
 
 	return c.NoContent(http.StatusNoContent)
@@ -404,14 +435,18 @@ func convertBotStatsToViewModel(stats *BotStats) *templates.BotStatsViewModel {
 // For hourly (last 24 hours), it uses a rolling 24-hour window aligned to hour boundaries.
 // For other periods, it uses calendar day boundaries.
 func periodTimeRange(days int, hourly bool) (time.Time, time.Time) {
-	now := time.Now().UTC()
+	return periodTimeRangeAt(time.Now(), days, hourly)
+}
+
+func periodTimeRangeAt(now time.Time, days int, hourly bool) (time.Time, time.Time) {
+	now = now.UTC()
 	if hourly {
 		currentHour := now.Truncate(time.Hour)
 		from := currentHour.Add(-23 * time.Hour)
 		to := currentHour.Add(time.Hour)
 		return from, to
 	}
-	from := now.AddDate(0, 0, -days).Truncate(24 * time.Hour)
+	from := now.AddDate(0, 0, -(days - 1)).Truncate(24 * time.Hour)
 	to := now.Add(24 * time.Hour).Truncate(24 * time.Hour)
 	return from, to
 }

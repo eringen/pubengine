@@ -4,76 +4,74 @@ package analytics
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
-	"fmt"
-	"regexp"
+	"net/url"
 	"strings"
-	"sync"
 	"time"
 )
 
-// salt holds the per-installation random salt for IP hashing, protected by sync.Once.
-var salt struct {
-	once  sync.Once
-	value string
-}
-
-// InitSalt loads or generates a persistent salt for IP hashing.
-// Must be called once at startup before any requests are served.
+// InitSalt initializes this store's persistent hashing key. Failed attempts can retry.
+// NewStore calls it before returning; repeated calls on that store are harmless.
 func InitSalt(store *Store) error {
-	var initErr error
-	salt.once.Do(func() {
-		s, err := store.GetSetting("hash_salt")
-		if err != nil {
-			initErr = fmt.Errorf("read hash salt: %w", err)
-			return
+	store.saltMu.Lock()
+	defer store.saltMu.Unlock()
+	if store.salt != "" {
+		return nil
+	}
+	tx, err := store.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var value string
+	err = tx.QueryRow("SELECT value FROM settings WHERE key='hash_salt'").Scan(&value)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if value == "" {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return err
 		}
-		if s == "" {
-			b := make([]byte, 32)
-			if _, err := rand.Read(b); err != nil {
-				initErr = fmt.Errorf("generate salt: %w", err)
-				return
-			}
-			s = hex.EncodeToString(b)
-			if err := store.SetSetting("hash_salt", s); err != nil {
-				initErr = fmt.Errorf("store hash salt: %w", err)
-				return
-			}
+		value = hex.EncodeToString(b)
+		if _, err := tx.Exec("INSERT INTO settings (key,value) VALUES ('hash_salt',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", value); err != nil {
+			return err
 		}
-		salt.value = s
-	})
-	return initErr
-}
-
-// getSalt returns the initialized salt value.
-func getSalt() string {
-	return salt.value
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	store.salt = value
+	return nil
 }
 
 // Visit represents a single page view.
 type Visit struct {
+	PageViewID  string    `json:"page_view_id"`
 	ID          int64     `json:"-"`
-	VisitorID   string    `json:"visitor_id"`   // Anonymous fingerprint hash
-	SessionID   string    `json:"session_id"`   // Session identifier
-	IPHash      string    `json:"-"`            // Hashed IP address
-	Browser     string    `json:"browser"`      // Browser name
-	OS          string    `json:"os"`           // Operating system
-	Device      string    `json:"device"`       // desktop, mobile, tablet
-	Path        string    `json:"path"`         // Page path
-	Referrer    string    `json:"referrer"`     // Referrer URL
-	ScreenSize  string    `json:"screen_size"`  // e.g., "1920x1080"
+	VisitorID   string    `json:"visitor_id"`  // Anonymous fingerprint hash
+	SessionID   string    `json:"session_id"`  // Session identifier
+	IPHash      string    `json:"-"`           // Hashed IP address
+	Browser     string    `json:"browser"`     // Browser name
+	OS          string    `json:"os"`          // Operating system
+	Device      string    `json:"device"`      // desktop, mobile, tablet
+	Path        string    `json:"path"`        // Page path
+	Referrer    string    `json:"referrer"`    // Referrer URL
+	ScreenSize  string    `json:"screen_size"` // e.g., "1920x1080"
 	Timestamp   time.Time `json:"timestamp"`
 	DurationSec int       `json:"duration_sec"` // Time spent on page (0 if not available)
 }
 
 // BotVisit represents a single bot/crawler page view.
 type BotVisit struct {
-	ID        int64     `json:"-"`
-	BotName   string    `json:"bot_name"`   // Name of the bot (e.g., "Googlebot")
-	IPHash    string    `json:"-"`          // Hashed IP address
-	UserAgent string    `json:"user_agent"` // Full user agent string
-	Path      string    `json:"path"`       // Page path
-	Timestamp time.Time `json:"timestamp"`
+	PageViewID string    `json:"page_view_id"`
+	ID         int64     `json:"-"`
+	BotName    string    `json:"bot_name"`   // Name of the bot (e.g., "Googlebot")
+	IPHash     string    `json:"-"`          // Hashed IP address
+	UserAgent  string    `json:"user_agent"` // Full user agent string
+	Path       string    `json:"path"`       // Page path
+	Timestamp  time.Time `json:"timestamp"`
 }
 
 // VisitRequest is the data sent from client.
@@ -87,17 +85,17 @@ type VisitRequest struct {
 
 // Stats holds aggregated analytics data.
 type Stats struct {
-	Period        string            `json:"period"`
-	UniqueVisitors int              `json:"unique_visitors"`
-	TotalViews    int               `json:"total_views"`
-	AvgDuration   int               `json:"avg_duration_sec"`
-	TopPages      []PageStat        `json:"top_pages"`
-	LatestPages   []LatestPageVisit `json:"latest_pages"`
-	BrowserStats  []DimensionStat   `json:"browsers"`
-	OSStats       []DimensionStat   `json:"os"`
-	DeviceStats   []DimensionStat   `json:"devices"`
-	ReferrerStats []DimensionStat   `json:"referrers"`
-	DailyViews    []DailyView       `json:"daily_views"`
+	Period         string            `json:"period"`
+	UniqueVisitors int               `json:"unique_visitors"`
+	TotalViews     int               `json:"total_views"`
+	AvgDuration    int               `json:"avg_duration_sec"`
+	TopPages       []PageStat        `json:"top_pages"`
+	LatestPages    []LatestPageVisit `json:"latest_pages"`
+	BrowserStats   []DimensionStat   `json:"browsers"`
+	OSStats        []DimensionStat   `json:"os"`
+	DeviceStats    []DimensionStat   `json:"devices"`
+	ReferrerStats  []DimensionStat   `json:"referrers"`
+	DailyViews     []DailyView       `json:"daily_views"`
 }
 
 // BotStats holds aggregated bot analytics data.
@@ -134,18 +132,20 @@ type DailyView struct {
 	Views int    `json:"views"`
 }
 
-// HashIP creates a salted SHA-256 hash of an IP address.
-func HashIP(ip string) string {
-	h := sha256.New()
-	h.Write([]byte(getSalt() + ip))
-	return hex.EncodeToString(h.Sum(nil))[:16]
+// HashIP creates a hash scoped to this analytics installation.
+func (s *Store) HashIP(ip string) string { return s.hashIdentity(ip) }
+
+// GenerateVisitorID creates a persistent installation-scoped visitor identifier.
+func (s *Store) GenerateVisitorID(ip, userAgent string) string {
+	return s.hashIdentity(ip + "|" + userAgent)
 }
 
-// GenerateVisitorID creates a salted visitor ID from IP and User-Agent.
-func GenerateVisitorID(ip, userAgent string) string {
-	h := sha256.New()
-	h.Write([]byte(getSalt() + ip + "|" + userAgent))
-	return hex.EncodeToString(h.Sum(nil))[:16]
+func (s *Store) hashIdentity(value string) string {
+	s.saltMu.RLock()
+	key := s.salt
+	s.saltMu.RUnlock()
+	sum := sha256.Sum256([]byte(key + value))
+	return hex.EncodeToString(sum[:])[:16]
 }
 
 // ParseUserAgent extracts browser, OS, and device from User-Agent string.
@@ -251,40 +251,34 @@ func ExtractBotName(ua string) string {
 	return "Unknown"
 }
 
-// referrerDomainRegex is pre-compiled for use in CleanReferrer.
-var referrerDomainRegex = regexp.MustCompile(`^https?://(?:www\.)?([^/]+)`)
-
-// CleanReferrer extracts the domain from a referrer URL.
+// CleanReferrer normalizes raw URLs and historical stored labels to one source.
 func CleanReferrer(ref string) string {
+	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		return "Direct"
 	}
-
-	// Check for common search engines
-	refLower := strings.ToLower(ref)
-	if strings.Contains(refLower, "google.") {
-		return "Google"
+	for _, label := range []string{"Direct", "Google", "Bing", "DuckDuckGo", "Yahoo", "GitHub", "Other"} {
+		if strings.EqualFold(ref, label) {
+			return label
+		}
 	}
-	if strings.Contains(refLower, "bing.") {
-		return "Bing"
+	if !strings.Contains(ref, "://") {
+		ref = "https://" + ref
 	}
-	if strings.Contains(refLower, "duckduckgo.") {
-		return "DuckDuckGo"
+	u, err := url.Parse(ref)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return "Other"
 	}
-	if strings.Contains(refLower, "yahoo.") {
-		return "Yahoo"
+	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	for _, source := range []struct{ domain, label string }{
+		{"google.com", "Google"}, {"google.co.uk", "Google"}, {"google.com.tr", "Google"}, {"google.de", "Google"},
+		{"bing.com", "Bing"}, {"duckduckgo.com", "DuckDuckGo"}, {"yahoo.com", "Yahoo"}, {"github.com", "GitHub"},
+	} {
+		if host == source.domain || strings.HasSuffix(host, "."+source.domain) {
+			return source.label
+		}
 	}
-	if strings.Contains(refLower, "github.") {
-		return "GitHub"
-	}
-
-	// Extract domain
-	matches := referrerDomainRegex.FindStringSubmatch(ref)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-
-	return "Other"
+	return host
 }
 
 // TruncateDate returns the date truncated to the specified period.

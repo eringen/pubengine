@@ -62,7 +62,7 @@ templ PeriodSelector(activePeriod string) {
 			onclick="loadPeriod('today')"
 			class={ "period-btn", templ.KV("active", activePeriod == "today") }
 		>
-			Last 24 Hours
+			Current and previous 23 hours
 		</button>
 		<button
 			data-period="week"

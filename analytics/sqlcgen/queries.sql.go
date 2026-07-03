@@ -322,16 +322,18 @@ func (q *Queries) HourlyViews(ctx context.Context, timestamp time.Time, timestam
 }
 
 const insertBotVisit = `-- name: InsertBotVisit :exec
-INSERT INTO bot_visits (bot_name, ip_hash, user_agent, path, timestamp)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO bot_visits (bot_name, ip_hash, user_agent, path, timestamp, page_view_id)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(ip_hash,page_view_id) DO NOTHING
 `
 
 type InsertBotVisitParams struct {
-	BotName   string
-	IpHash    string
-	UserAgent string
-	Path      string
-	Timestamp time.Time
+	BotName    string
+	IpHash     string
+	UserAgent  string
+	Path       string
+	Timestamp  time.Time
+	PageViewID sql.NullString
 }
 
 func (q *Queries) InsertBotVisit(ctx context.Context, arg InsertBotVisitParams) error {
@@ -341,14 +343,18 @@ func (q *Queries) InsertBotVisit(ctx context.Context, arg InsertBotVisitParams) 
 		arg.UserAgent,
 		arg.Path,
 		arg.Timestamp,
+		arg.PageViewID,
 	)
 	return err
 }
 
 const insertVisit = `-- name: InsertVisit :exec
 
-INSERT INTO visits (visitor_id, session_id, ip_hash, browser, os, device, path, referrer, screen_size, timestamp, duration_sec)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO visits (visitor_id, session_id, ip_hash, browser, os, device, path, referrer, screen_size, timestamp, duration_sec, page_view_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(visitor_id,page_view_id) DO UPDATE
+SET duration_sec = MAX(COALESCE(visits.duration_sec,0), excluded.duration_sec)
+WHERE visits.path = excluded.path
 `
 
 type InsertVisitParams struct {
@@ -363,6 +369,7 @@ type InsertVisitParams struct {
 	ScreenSize  sql.NullString
 	Timestamp   time.Time
 	DurationSec sql.NullInt64
+	PageViewID  sql.NullString
 }
 
 // Inserts
@@ -379,6 +386,7 @@ func (q *Queries) InsertVisit(ctx context.Context, arg InsertVisitParams) error 
 		arg.ScreenSize,
 		arg.Timestamp,
 		arg.DurationSec,
+		arg.PageViewID,
 	)
 	return err
 }
@@ -529,16 +537,7 @@ func (q *Queries) OSStats(ctx context.Context, timestamp time.Time, timestamp_2 
 }
 
 const referrerStats = `-- name: ReferrerStats :many
-SELECT
-    CASE
-        WHEN referrer = '' OR referrer IS NULL THEN 'Direct'
-        WHEN referrer LIKE '%google.%' THEN 'Google'
-        WHEN referrer LIKE '%bing.%' THEN 'Bing'
-        WHEN referrer LIKE '%duckduckgo.%' THEN 'DuckDuckGo'
-        WHEN referrer LIKE '%yahoo.%' THEN 'Yahoo'
-        WHEN referrer LIKE '%github.%' THEN 'GitHub'
-        ELSE 'Other'
-    END AS name,
+SELECT CAST(COALESCE(NULLIF(referrer, ''), 'Direct') AS TEXT) AS name,
     COUNT(*) AS count
 FROM visits
 WHERE timestamp >= ? AND timestamp < ?

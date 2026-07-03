@@ -10,12 +10,13 @@ import (
 )
 
 type BotVisit struct {
-	ID        int64
-	BotName   string
-	IpHash    string
-	UserAgent string
-	Path      string
-	Timestamp time.Time
+	ID         int64
+	PageViewID sql.NullString
+	BotName    string
+	IpHash     string
+	UserAgent  string
+	Path       string
+	Timestamp  time.Time
 }
 
 type Setting struct {
@@ -25,6 +26,7 @@ type Setting struct {
 
 type Visit struct {
 	ID          int64
+	PageViewID  sql.NullString
 	VisitorID   string
 	SessionID   string
 	IpHash      string

@@ -10,12 +10,16 @@ ON CONFLICT(key) DO UPDATE SET value = excluded.value;
 -- Inserts
 
 -- name: InsertVisit :exec
-INSERT INTO visits (visitor_id, session_id, ip_hash, browser, os, device, path, referrer, screen_size, timestamp, duration_sec)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO visits (visitor_id, session_id, ip_hash, browser, os, device, path, referrer, screen_size, timestamp, duration_sec, page_view_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(visitor_id,page_view_id) DO UPDATE
+SET duration_sec = MAX(COALESCE(visits.duration_sec,0), excluded.duration_sec)
+WHERE visits.path = excluded.path;
 
 -- name: InsertBotVisit :exec
-INSERT INTO bot_visits (bot_name, ip_hash, user_agent, path, timestamp)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO bot_visits (bot_name, ip_hash, user_agent, path, timestamp, page_view_id)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(ip_hash,page_view_id) DO NOTHING;
 
 -- Visitor aggregations
 
@@ -65,16 +69,7 @@ GROUP BY device
 ORDER BY count DESC;
 
 -- name: ReferrerStats :many
-SELECT
-    CASE
-        WHEN referrer = '' OR referrer IS NULL THEN 'Direct'
-        WHEN referrer LIKE '%google.%' THEN 'Google'
-        WHEN referrer LIKE '%bing.%' THEN 'Bing'
-        WHEN referrer LIKE '%duckduckgo.%' THEN 'DuckDuckGo'
-        WHEN referrer LIKE '%yahoo.%' THEN 'Yahoo'
-        WHEN referrer LIKE '%github.%' THEN 'GitHub'
-        ELSE 'Other'
-    END AS name,
+SELECT CAST(COALESCE(NULLIF(referrer, ''), 'Direct') AS TEXT) AS name,
     COUNT(*) AS count
 FROM visits
 WHERE timestamp >= ? AND timestamp < ?
