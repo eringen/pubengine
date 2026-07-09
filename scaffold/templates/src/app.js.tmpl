@@ -1,1 +1,14 @@
-// app.js — your custom JavaScript goes here.
+// Keep the image panel available after failed requests.
+window.pubenginePanel = async function (url, options) {
+  const panel = document.getElementById("post-form");
+  try {
+    const response = await fetch(url, options);
+    if (response.redirected) { location.assign(response.url); return; }
+    if (!response.ok) throw new Error("Request failed (" + response.status + "). Please retry.");
+    panel.innerHTML = await response.text();
+  } catch (error) {
+    let message = panel.querySelector('[role="alert"]');
+    if (!message) { message = document.createElement("p"); message.setAttribute("role", "alert"); panel.prepend(message); }
+    message.textContent = error.message;
+  }
+};

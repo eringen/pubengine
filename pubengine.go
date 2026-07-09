@@ -35,6 +35,7 @@ type ViewFuncs struct {
 	AdminLogin       func(errorMsg string, csrfToken string, googleLoginURL string) templ.Component
 	AdminDashboard   func(posts []BlogPost, message string, csrfToken string) templ.Component
 	AdminFormPartial func(post BlogPost, csrfToken string) templ.Component
+	AdminEditor      func(post BlogPost, csrfToken string) templ.Component
 	AdminImages      func(images []Image, csrfToken string) templ.Component
 	NotFound         func() templ.Component
 	ServerError      func() templ.Component

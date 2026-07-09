@@ -30,6 +30,7 @@ func New(cfg pubengine.SiteConfig) pubengine.ViewFuncs {
   AdminLogin: func(msg,csrf,url string) templ.Component { return wrap(AdminLogin(msg,csrf,url)) },
   AdminDashboard: func(p []pubengine.BlogPost,msg,csrf string) templ.Component { return wrap(AdminDashboard(p,msg,csrf)) },
   AdminFormPartial: func(p pubengine.BlogPost,csrf string) templ.Component { return wrap(AdminFormPartial(p,csrf)) },
+  AdminEditor: func(p pubengine.BlogPost,csrf string) templ.Component { return wrap(AdminEditor(p,csrf)) },
   AdminImages: func(p []pubengine.Image,csrf string) templ.Component { return wrap(AdminImages(p,csrf)) },
   NotFound: func() templ.Component { return wrap(NotFound()) },
   ServerError: func() templ.Component { return wrap(ServerError()) },

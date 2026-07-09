@@ -290,7 +290,7 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 			action="/admin/images/upload/"
 			method="POST"
 			enctype="multipart/form-data"
-			onsubmit="event.preventDefault();fetch(this.action,{method:'POST',body:new FormData(this)}).then(function(r){return r.text()}).then(function(t){document.getElementById('post-form').innerHTML=t})"
+			onsubmit="event.preventDefault();window.pubenginePanel(this.action,{method:'POST',body:new FormData(this)})"
 			class="flex items-end gap-3"
 		>
 			<input type="hidden" name="_csrf" value={ csrfToken }/>
@@ -337,7 +337,7 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 								</button>
 								<span class="text-gray-300">|</span>
 								<button
-									onclick={ templ.ComponentScript{Call: fmt.Sprintf("if(!confirm('Delete this image?'))return;fetch('/admin/images/%s/',{method:'DELETE',headers:{'X-CSRF-Token':'%s'}}).then(function(r){return r.text()}).then(function(t){document.getElementById('post-form').innerHTML=t})", img.Filename, csrfToken)} }
+									onclick={ templ.ComponentScript{Call: fmt.Sprintf("if(!confirm('Delete this image?'))return;window.pubenginePanel('/admin/images/%s/',{method:'DELETE',headers:{'X-CSRF-Token':'%s'}})", img.Filename, csrfToken)} }
 									class="text-xs text-red-600 hover:underline"
 								>
 									Delete
@@ -351,4 +351,16 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 			<p class="text-gray-500 text-sm">No images uploaded yet.</p>
 		}
 	</div>
+}
+
+// AdminEditor keeps validation errors in a complete page.
+templ AdminEditor(post pubengine.BlogPost, csrfToken string) {
+ <!DOCTYPE html>
+ <html lang="en">
+  @Head("Edit post | " + siteConfig(ctx).Name)
+  <body class="max-w-3xl mx-auto px-4 py-8">
+   <a href="/admin/">Back to posts</a>
+   @AdminFormPartial(post, csrfToken)
+  </body>
+ </html>
 }

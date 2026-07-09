@@ -97,7 +97,7 @@ func (a *App) handleAdminSave(c echo.Context) error {
 		p.Revision, err = strconv.ParseInt(revision, 10, 64)
 		if err != nil || p.Revision < 0 {
 			p.Error = "Invalid revision. Reload the editor."
-			return RenderStatus(c, http.StatusBadRequest, a.Views.AdminFormPartial(p, CsrfToken(c)))
+			return a.renderEditorError(c, http.StatusBadRequest, p)
 		}
 	}
 	if err := a.Store.SavePost(p); err != nil {
@@ -110,10 +110,10 @@ func (a *App) handleAdminSave(c echo.Context) error {
 			}
 		}
 		p.Error = err.Error()
-		return RenderStatus(c, status, a.Views.AdminFormPartial(p, CsrfToken(c)))
+		return a.renderEditorError(c, status, p)
 	}
 	a.Cache.Invalidate()
-	return a.renderAdminDashboard(c, "saved")
+	return c.Redirect(http.StatusSeeOther, "/admin/?msg=saved")
 }
 
 func (a *App) handleAdminDelete(c echo.Context) error {
@@ -125,7 +125,7 @@ func (a *App) handleAdminDelete(c echo.Context) error {
 		return err
 	}
 	a.Cache.Invalidate()
-	return a.renderAdminDashboard(c, "deleted")
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (a *App) renderAdminDashboard(c echo.Context, msg string) error {
@@ -134,4 +134,14 @@ func (a *App) renderAdminDashboard(c echo.Context, msg string) error {
 		return err
 	}
 	return Render(c, a.Views.AdminDashboard(posts, msg, CsrfToken(c)))
+}
+
+func (a *App) renderEditorError(c echo.Context, status int, post BlogPost) error {
+	if c.Request().Header.Get("X-TalkDOM-Request") == "true" {
+		return RenderStatus(c, status, a.Views.AdminFormPartial(post, CsrfToken(c)))
+	}
+	if a.Views.AdminEditor != nil {
+		return RenderStatus(c, status, a.Views.AdminEditor(post, CsrfToken(c)))
+	}
+	return RenderStatus(c, status, editorPage(a.Views.AdminFormPartial(post, CsrfToken(c))))
 }
