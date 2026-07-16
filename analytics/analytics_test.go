@@ -99,6 +99,7 @@ func TestSaltIsolationPersistenceAndRetry(t *testing.T) {
 func TestPageViewIdentityAndOutOfOrderEvents(t *testing.T) {
 	s := testStore(t)
 	h := NewHandler(s)
+	t.Cleanup(h.Close)
 	e := echo.New()
 	send := func(event, id, path string, duration int) {
 		t.Helper()
@@ -145,6 +146,7 @@ func TestPageViewIdentityAndOutOfOrderEvents(t *testing.T) {
 func TestCollectRejectsInvalidIdentityAndHeaderFallback(t *testing.T) {
 	s := testStore(t)
 	h := NewHandler(s)
+	t.Cleanup(h.Close)
 	e := echo.New()
 	for _, body := range []string{`{"path":"/","duration_sec":0}`, `{"event":"view","page_view_id":"aaaaaaaaaaaaaaaa","path":"https://example.com/"}`} {
 		r := httptest.NewRecorder()

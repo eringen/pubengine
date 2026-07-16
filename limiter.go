@@ -7,6 +7,9 @@ import (
 
 // LoginLimiter rate-limits login attempts per IP address.
 type LoginLimiter struct {
+	done     chan struct{}
+	stopped  chan struct{}
+	stopOnce sync.Once
 	mu       sync.Mutex
 	attempts map[string][]time.Time
 	max      int
@@ -19,6 +22,7 @@ func NewLoginLimiter(max int, window time.Duration) *LoginLimiter {
 		attempts: make(map[string][]time.Time),
 		max:      max,
 		window:   window,
+		done:     make(chan struct{}), stopped: make(chan struct{}),
 	}
 	go l.cleanup()
 	return l
@@ -26,7 +30,14 @@ func NewLoginLimiter(max int, window time.Duration) *LoginLimiter {
 
 func (l *LoginLimiter) cleanup() {
 	ticker := time.NewTicker(l.window)
-	for range ticker.C {
+	defer ticker.Stop()
+	defer close(l.stopped)
+	for {
+		select {
+		case <-l.done:
+			return
+		case <-ticker.C:
+		}
 		cutoff := time.Now().Add(-l.window)
 		l.mu.Lock()
 		for ip, hits := range l.attempts {
@@ -90,4 +101,10 @@ func (l *LoginLimiter) Record(ip string) {
 	l.mu.Lock()
 	l.attempts[ip] = append(l.attempts[ip], time.Now())
 	l.mu.Unlock()
+}
+
+// Close stops the cleanup worker and waits for it to exit. It is safe to repeat.
+func (l *LoginLimiter) Close() {
+	l.stopOnce.Do(func() { close(l.done) })
+	<-l.stopped
 }

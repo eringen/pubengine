@@ -545,7 +545,10 @@ func fillHourlyGaps(from time.Time, sparse []DailyView) []DailyView {
 
 // CleanupOldVisits removes visits and bot visits older than the retention period.
 func (s *Store) CleanupOldVisits(retentionDays int) error {
-	ctx := context.Background()
+	return s.cleanupOldVisits(context.Background(), retentionDays)
+}
+
+func (s *Store) cleanupOldVisits(ctx context.Context, retentionDays int) error {
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
 	if err := s.q.DeleteOldVisits(ctx, cutoff); err != nil {
 		return fmt.Errorf("cleanup visits: %w", err)
@@ -559,23 +562,23 @@ func (s *Store) CleanupOldVisits(retentionDays int) error {
 // StartCleanupScheduler runs periodic cleanup of old data. Returns a stop function.
 func (s *Store) StartCleanupScheduler(retentionDays int, interval time.Duration) func() {
 	ticker := time.NewTicker(interval)
-	done := make(chan struct{})
-
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
 	go func() {
+		defer ticker.Stop()
+		defer close(stopped)
 		for {
 			select {
 			case <-ticker.C:
-				if err := s.CleanupOldVisits(retentionDays); err != nil {
+				if err := s.cleanupOldVisits(ctx, retentionDays); err != nil && ctx.Err() == nil {
 					fmt.Printf("cleanup error: %v\n", err)
 				}
-			case <-done:
-				ticker.Stop()
+			case <-ctx.Done():
 				return
 			}
 		}
 	}()
-
-	return func() { close(done) }
+	return func() { cancel(); <-stopped }
 }
 
 // GetRealtimeVisitors returns the number of unique visitors in the last 5 minutes.

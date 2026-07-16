@@ -2,6 +2,9 @@ package main
 
 import (
 	"log"
+	"context"
+	"os/signal"
+	"syscall"
 
 	"github.com/eringen/pubengine"
 
@@ -9,6 +12,8 @@ import (
 )
 
 func main() {
+	ctx,stop:=signal.NotifyContext(context.Background(),syscall.SIGINT,syscall.SIGTERM)
+	defer stop()
 	app := pubengine.New(
 		pubengine.SiteConfig{
 			Name:          pubengine.EnvOr("SITE_NAME", "{{.SiteName}}"),
@@ -41,7 +46,7 @@ func main() {
 	)
 	defer app.Close()
 
-	if err := app.Start(); err != nil {
-		log.Fatal(err)
+	if err := app.StartContext(ctx); err != nil {
+		log.Print(err)
 	}
 }

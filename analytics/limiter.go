@@ -7,10 +7,13 @@ import (
 
 // rateLimiter is a per-key sliding-window rate limiter.
 type rateLimiter struct {
-	mu     sync.Mutex
-	hits   map[string][]time.Time
-	max    int
-	window time.Duration
+	done     chan struct{}
+	stopped  chan struct{}
+	stopOnce sync.Once
+	mu       sync.Mutex
+	hits     map[string][]time.Time
+	max      int
+	window   time.Duration
 }
 
 func newRateLimiter(max int, window time.Duration) *rateLimiter {
@@ -18,6 +21,7 @@ func newRateLimiter(max int, window time.Duration) *rateLimiter {
 		hits:   make(map[string][]time.Time),
 		max:    max,
 		window: window,
+		done:   make(chan struct{}), stopped: make(chan struct{}),
 	}
 	go rl.cleanup()
 	return rl
@@ -48,7 +52,14 @@ func (rl *rateLimiter) allow(key string) bool {
 
 func (rl *rateLimiter) cleanup() {
 	ticker := time.NewTicker(rl.window)
-	for range ticker.C {
+	defer ticker.Stop()
+	defer close(rl.stopped)
+	for {
+		select {
+		case <-rl.done:
+			return
+		case <-ticker.C:
+		}
 		cutoff := time.Now().Add(-rl.window)
 		rl.mu.Lock()
 		for key, hits := range rl.hits {
@@ -66,4 +77,10 @@ func (rl *rateLimiter) cleanup() {
 		}
 		rl.mu.Unlock()
 	}
+}
+
+// close stops the cleanup worker and waits for it to exit. It is safe to repeat.
+func (rl *rateLimiter) close() {
+	rl.stopOnce.Do(func() { close(rl.done) })
+	<-rl.stopped
 }

@@ -485,3 +485,6 @@ func (h *Handler) Dashboard(c echo.Context) error {
 func (h *Handler) DashboardHTML(c echo.Context) error {
 	return templates.Dashboard().Render(c.Request().Context(), c.Response())
 }
+
+// Close stops the handler's background rate-limiter worker.
+func (h *Handler) Close() { h.collectLimiter.close() }

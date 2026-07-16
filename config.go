@@ -27,6 +27,12 @@ type SiteConfig struct {
 	GoogleClientSecret string // Google OAuth client secret (optional)
 	GoogleAdminEmail   string // Allowed Google email for admin login (optional)
 
+	ReadHeaderTimeout time.Duration // Default 5 seconds
+	ReadTimeout       time.Duration // Default 30 seconds
+	WriteTimeout      time.Duration // Default 30 seconds
+	IdleTimeout       time.Duration // Default 60 seconds
+	ShutdownTimeout   time.Duration // Default 10 seconds
+
 	PostCacheTTL time.Duration // Post cache TTL (default 5min)
 }
 
@@ -36,6 +42,21 @@ func (c *SiteConfig) GoogleAuthEnabled() bool {
 }
 
 func (c *SiteConfig) setDefaults() {
+	if c.ReadHeaderTimeout == 0 {
+		c.ReadHeaderTimeout = 5 * time.Second
+	}
+	if c.ReadTimeout == 0 {
+		c.ReadTimeout = 30 * time.Second
+	}
+	if c.WriteTimeout == 0 {
+		c.WriteTimeout = 30 * time.Second
+	}
+	if c.IdleTimeout == 0 {
+		c.IdleTimeout = time.Minute
+	}
+	if c.ShutdownTimeout == 0 {
+		c.ShutdownTimeout = 10 * time.Second
+	}
 	if c.Name == "" {
 		c.Name = "Blog"
 	}
@@ -83,6 +104,9 @@ func (c SiteConfig) validate() error {
 	}
 	if c.PostCacheTTL < 0 {
 		return fmt.Errorf("pubengine: PostCacheTTL must not be negative")
+	}
+	if c.ReadHeaderTimeout < 0 || c.ReadTimeout < 0 || c.WriteTimeout < 0 || c.IdleTimeout < 0 || c.ShutdownTimeout < 0 {
+		return fmt.Errorf("pubengine: server timeouts must not be negative")
 	}
 	return nil
 }

@@ -6,9 +6,12 @@
 package pubengine
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -46,11 +49,18 @@ type App struct {
 	Cache  *PostCache
 	Views  ViewFuncs
 
-	loginLimiter   *LoginLimiter
-	analyticsStore *analytics.Store
-	customRoutes   []func(*App)
-	staticDir      string
-	imageMu        sync.Mutex
+	loginLimiter     *LoginLimiter
+	analyticsStore   *analytics.Store
+	customRoutes     []func(*App)
+	staticDir        string
+	imageMu          sync.Mutex
+	lifecycleMu      sync.Mutex
+	started          bool
+	closed           bool
+	closeOnce        sync.Once
+	closeErr         error
+	analyticsHandler *analytics.Handler
+	stopCleanup      func()
 }
 
 // New creates a new pubengine App with the given configuration and view functions.
@@ -71,55 +81,78 @@ func New(cfg SiteConfig, views ViewFuncs, opts ...Option) *App {
 	return a
 }
 
-// Start initializes the database, cache, middleware, routes, and starts the server.
-func (a *App) Start() error {
-	if err := a.Config.validate(); err != nil {
+// Start serves until Close or Shutdown is called.
+func (a *App) Start() error { return a.StartContext(context.Background()) }
+
+// StartContext initializes the app and shuts it down when ctx is canceled.
+// An App may be started once; create a new App after shutdown.
+func (a *App) StartContext(ctx context.Context) (err error) {
+	a.lifecycleMu.Lock()
+	if a.started || a.closed {
+		a.lifecycleMu.Unlock()
+		return fmt.Errorf("pubengine: app already started or closed")
+	}
+	a.started = true
+	listener, err := a.initialize(ctx)
+	a.lifecycleMu.Unlock()
+	defer func() { err = errors.Join(err, a.Close()) }()
+	if err != nil {
 		return err
 	}
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = a.Close()
+		case <-done:
+		}
+	}()
+	err = a.Echo.Server.Serve(listener)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
 
-	// Initialize store
+func (a *App) initialize(ctx context.Context) (net.Listener, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := a.Config.validate(); err != nil {
+		return nil, err
+	}
 	store, err := NewStore(a.Config.DatabasePath)
 	if err != nil {
-		return fmt.Errorf("pubengine: init store: %w", err)
+		return nil, fmt.Errorf("pubengine: init store: %w", err)
 	}
 	a.Store = store
-
-	// Initialize cache
-	a.Cache = NewPostCache(a.Store, a.Config.PostCacheTTL)
-
-	// Initialize login limiter
+	a.Cache = NewPostCache(store, a.Config.PostCacheTTL)
 	a.loginLimiter = NewLoginLimiter(5, time.Minute)
-
-	// Initialize analytics if enabled
 	if a.Config.AnalyticsEnabled {
-		analyticsStore, err := analytics.NewStore(a.Config.AnalyticsDatabasePath)
+		a.analyticsStore, err = analytics.NewStore(a.Config.AnalyticsDatabasePath)
 		if err != nil {
-			return fmt.Errorf("pubengine: init analytics: %w", err)
+			return nil, fmt.Errorf("pubengine: init analytics: %w", err)
 		}
-		a.analyticsStore = analyticsStore
-		if err := analytics.InitSalt(analyticsStore); err != nil {
-			return fmt.Errorf("pubengine: init analytics salt: %w", err)
-		}
-		stopCleanup := analyticsStore.StartCleanupScheduler(365, 24*time.Hour)
-		defer stopCleanup()
+		a.stopCleanup = a.analyticsStore.StartCleanupScheduler(365, 24*time.Hour)
 	}
-
-	// Setup middleware
 	a.setupMiddleware()
-
-	// Setup routes
 	a.setupRoutes()
-
-	// Apply custom routes
 	for _, fn := range a.customRoutes {
 		fn(a)
 	}
-
-	// Start server
-	if err := a.Echo.Start(a.Config.Addr); err != nil && err != http.ErrServerClosed {
-		return err
+	a.Echo.Server.Addr = a.Config.Addr
+	a.Echo.Server.Handler = a.Echo
+	a.Echo.Server.ReadHeaderTimeout = a.Config.ReadHeaderTimeout
+	a.Echo.Server.ReadTimeout = a.Config.ReadTimeout
+	a.Echo.Server.WriteTimeout = a.Config.WriteTimeout
+	a.Echo.Server.IdleTimeout = a.Config.IdleTimeout
+	listener, err := net.Listen("tcp", a.Config.Addr)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	a.Echo.Listener = listener
+	return listener, nil
 }
 
 func (a *App) setupRoutes() {
@@ -166,6 +199,7 @@ func (a *App) setupRoutes() {
 	// Analytics routes
 	if a.Config.AnalyticsEnabled && a.analyticsStore != nil {
 		analyticsHandler := analytics.NewHandler(a.analyticsStore)
+		a.analyticsHandler = analyticsHandler
 		analyticsAuthMiddleware := func(next echo.HandlerFunc) echo.HandlerFunc {
 			return func(c echo.Context) error {
 				if !IsAdmin(c) {
@@ -185,15 +219,49 @@ func (a *App) setupRoutes() {
 	}
 }
 
-// Close cleans up resources. Call this when the app is shutting down.
+// Shutdown drains HTTP requests before stopping workers and closing databases.
+// When the deadline expires, remaining connections are closed forcibly.
+func (a *App) Shutdown(ctx context.Context) error {
+	a.closeOnce.Do(func() {
+		a.lifecycleMu.Lock()
+		a.closed = true
+		a.lifecycleMu.Unlock()
+		err := a.Echo.Shutdown(ctx)
+		if err != nil {
+			err = errors.Join(err, a.Echo.Close())
+		}
+		// Shutdown can precede Serve registering the listener.
+		if a.Echo.Listener != nil {
+			closeErr := a.Echo.Listener.Close()
+			if closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
+				err = errors.Join(err, closeErr)
+			}
+		}
+		if a.stopCleanup != nil {
+			a.stopCleanup()
+		}
+		if a.analyticsHandler != nil {
+			a.analyticsHandler.Close()
+		}
+		if a.loginLimiter != nil {
+			a.loginLimiter.Close()
+		}
+		if a.Store != nil {
+			err = errors.Join(err, a.Store.Close())
+		}
+		if a.analyticsStore != nil {
+			err = errors.Join(err, a.analyticsStore.Close())
+		}
+		a.closeErr = err
+	})
+	return a.closeErr
+}
+
+// Close shuts down the app using its configured grace period. It is idempotent.
 func (a *App) Close() error {
-	if a.Store != nil {
-		a.Store.Close()
-	}
-	if a.analyticsStore != nil {
-		a.analyticsStore.Close()
-	}
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), a.Config.ShutdownTimeout)
+	defer cancel()
+	return a.Shutdown(ctx)
 }
 
 // EnvOr returns the value of the environment variable key, or fallback if empty.

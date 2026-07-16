@@ -9,6 +9,7 @@ import (
 
 func TestLoginLimiterBlocksAfterMax(t *testing.T) {
 	limiter := NewLoginLimiter(2, 200*time.Millisecond)
+	t.Cleanup(limiter.Close)
 	ip := "203.0.113.10"
 
 	if !limiter.Allow(ip) {
@@ -24,6 +25,7 @@ func TestLoginLimiterBlocksAfterMax(t *testing.T) {
 
 func TestLoginLimiterResetsAfterWindow(t *testing.T) {
 	limiter := NewLoginLimiter(1, 150*time.Millisecond)
+	t.Cleanup(limiter.Close)
 	ip := "203.0.113.20"
 
 	if !limiter.Allow(ip) {
@@ -41,6 +43,7 @@ func TestLoginLimiterResetsAfterWindow(t *testing.T) {
 
 func TestLoginLimiterIsPerIP(t *testing.T) {
 	limiter := NewLoginLimiter(1, 200*time.Millisecond)
+	t.Cleanup(limiter.Close)
 
 	if !limiter.Allow("203.0.113.30") {
 		t.Fatalf("expected first ip to be allowed")
@@ -55,6 +58,7 @@ func TestLoginLimiterIsPerIP(t *testing.T) {
 
 func TestLoginLimiterConcurrentAdmission(t *testing.T) {
 	l := NewLoginLimiter(5, time.Minute)
+	t.Cleanup(l.Close)
 	var allowed atomic.Int32
 	var wg sync.WaitGroup
 	start := make(chan struct{})
