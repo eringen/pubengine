@@ -6,22 +6,29 @@ import (
 	"database/sql/driver"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 	"time"
 )
 
 type interruptedDriver struct{}
 type interruptedConn struct{}
-type interruptedRows struct{ sent bool }
+type interruptedRows struct {
+	sent    bool
+	summary bool
+}
 
 func (interruptedDriver) Open(string) (driver.Conn, error)  { return interruptedConn{}, nil }
 func (interruptedConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("not supported") }
 func (interruptedConn) Close() error                        { return nil }
 func (interruptedConn) Begin() (driver.Tx, error)           { return nil, errors.New("not supported") }
-func (interruptedConn) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
-	return &interruptedRows{}, nil
+func (interruptedConn) QueryContext(_ context.Context, query string, _ []driver.NamedValue) (driver.Rows, error) {
+	return &interruptedRows{summary: strings.Contains(query, "SELECT slug,title,date,tags,summary,published,revision")}, nil
 }
-func (*interruptedRows) Columns() []string {
+func (r *interruptedRows) Columns() []string {
+	if r.summary {
+		return []string{"slug", "title", "date", "tags", "summary", "published", "revision"}
+	}
 	return []string{"slug", "title", "date", "tags", "summary", "content", "published", "revision"}
 }
 func (*interruptedRows) Close() error { return nil }
@@ -30,6 +37,10 @@ func (r *interruptedRows) Next(values []driver.Value) error {
 		return io.ErrUnexpectedEOF
 	}
 	r.sent = true
+	if r.summary {
+		copy(values, []driver.Value{"post", "Post", "2026-01-01", ",go,", "summary", int64(1), int64(1)})
+		return nil
+	}
 	copy(values, []driver.Value{"post", "Post", "2026-01-01", ",go,", "summary", "body", int64(1), int64(1)})
 	return nil
 }

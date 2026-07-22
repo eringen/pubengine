@@ -34,7 +34,7 @@ func (a *App) handleAdminPost(c echo.Context) error {
 	if slug == "new" {
 		return Render(c, a.Views.AdminFormPartial(BlogPost{}, CsrfToken(c)))
 	}
-	post, err := a.Store.GetPostAny(slug)
+	post, err := a.Store.GetPostAnyContext(c.Request().Context(), slug)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.NoContent(http.StatusNotFound)
@@ -100,7 +100,7 @@ func (a *App) handleAdminSave(c echo.Context) error {
 			return a.renderEditorError(c, http.StatusBadRequest, p)
 		}
 	}
-	if err := a.Store.SavePost(p); err != nil {
+	if err := a.Store.SavePostContext(c.Request().Context(), p); err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, ErrPostConflict) {
 			status = http.StatusConflict
@@ -121,7 +121,7 @@ func (a *App) handleAdminDelete(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/admin/")
 	}
 	slug := c.Param("slug")
-	if err := a.Store.DeletePost(slug); err != nil {
+	if err := a.Store.DeletePostContext(c.Request().Context(), slug); err != nil {
 		return err
 	}
 	a.Cache.Invalidate()
@@ -129,7 +129,16 @@ func (a *App) handleAdminDelete(c echo.Context) error {
 }
 
 func (a *App) renderAdminDashboard(c echo.Context, msg string) error {
-	posts, err := a.Store.ListAllPosts()
+	var posts []BlogPost
+	var err error
+	if a.Config.PageSize > 0 {
+		offset := pageOffset(c, a.Config.PageSize)
+		var more bool
+		posts, more, err = a.Store.ListAdminPageContext(c.Request().Context(), offset, a.Config.PageSize)
+		setPagination(c, a.Config.PageSize, offset, more)
+	} else {
+		posts, err = a.Store.ListAllPostsContext(c.Request().Context())
+	}
 	if err != nil {
 		return err
 	}

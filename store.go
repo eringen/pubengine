@@ -1,6 +1,7 @@
 package pubengine
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -80,6 +81,8 @@ CREATE TABLE IF NOT EXISTS posts (
 		}
 	}
 	_, err = s.db.Exec(`
+CREATE INDEX IF NOT EXISTS idx_posts_published_date ON posts(published, date DESC, slug ASC);
+CREATE INDEX IF NOT EXISTS idx_posts_date ON posts(date DESC, slug ASC);
 CREATE TABLE IF NOT EXISTS post_redirects (slug TEXT PRIMARY KEY, target TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS images (
     filename TEXT PRIMARY KEY,
@@ -96,14 +99,12 @@ CREATE TABLE IF NOT EXISTS images (
 // ListPosts returns all published posts ordered by date descending.
 // If tag is non-empty, results are filtered to posts containing that tag.
 func (s *Store) ListPosts(tag string) ([]BlogPost, error) {
-	var rows *sql.Rows
-	var err error
-	if tag == "" {
-		rows, err = s.db.Query(`SELECT slug, title, date, tags, summary, content, published, revision FROM posts WHERE published = 1 ORDER BY date DESC`)
-	} else {
-		normalizedTag := strings.ToLower(strings.TrimSpace(tag))
-		rows, err = s.db.Query(`SELECT slug, title, date, tags, summary, content, published, revision FROM posts WHERE published = 1 AND instr(lower(tags), ',' || ? || ',') > 0 ORDER BY date DESC`, normalizedTag)
-	}
+	return s.ListPostsContext(context.Background(), tag)
+}
+
+func (s *Store) ListPostsContext(ctx context.Context, tag string) ([]BlogPost, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT slug, title, date, tags, summary, content, published, revision FROM posts WHERE published = 1 ORDER BY date DESC, slug ASC`)
+
 	if err != nil {
 		return nil, err
 	}
@@ -129,14 +130,20 @@ func (s *Store) ListPosts(tag string) ([]BlogPost, error) {
 			Revision:     revision,
 			OriginalSlug: slug,
 		}
-		posts = append(posts, post)
+		if tag == "" || hasTag(post.Tags, tag) {
+			posts = append(posts, post)
+		}
 	}
 	return posts, rows.Err()
 }
 
 // ListTags returns a sorted, deduplicated slice of all tags from published posts.
 func (s *Store) ListTags() ([]string, error) {
-	rows, err := s.db.Query(`SELECT tags FROM posts WHERE published = 1`)
+	return s.ListTagsContext(context.Background())
+}
+
+func (s *Store) ListTagsContext(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT tags FROM posts WHERE published = 1`)
 	if err != nil {
 		return nil, err
 	}
@@ -165,10 +172,14 @@ func (s *Store) ListTags() ([]string, error) {
 
 // GetPost returns a single published post by slug.
 func (s *Store) GetPost(slug string) (BlogPost, error) {
+	return s.GetPostContext(context.Background(), slug)
+}
+
+func (s *Store) GetPostContext(ctx context.Context, slug string) (BlogPost, error) {
 	var title, date, tags, summary, content string
 	var published int
 	var revision int64
-	err := s.db.QueryRow(`SELECT title, date, tags, summary, content, published, revision FROM posts WHERE slug = ? AND published = 1`, slug).
+	err := s.db.QueryRowContext(ctx, `SELECT title, date, tags, summary, content, published, revision FROM posts WHERE slug = ? AND published = 1`, slug).
 		Scan(&title, &date, &tags, &summary, &content, &published, &revision)
 	if err != nil {
 		return BlogPost{}, err
@@ -189,10 +200,14 @@ func (s *Store) GetPost(slug string) (BlogPost, error) {
 
 // GetPostAny returns a post by slug regardless of published status (for admin).
 func (s *Store) GetPostAny(slug string) (BlogPost, error) {
+	return s.GetPostAnyContext(context.Background(), slug)
+}
+
+func (s *Store) GetPostAnyContext(ctx context.Context, slug string) (BlogPost, error) {
 	var title, date, tags, summary, content string
 	var published int
 	var revision int64
-	err := s.db.QueryRow(`SELECT title, date, tags, summary, content, published, revision FROM posts WHERE slug = ?`, slug).
+	err := s.db.QueryRowContext(ctx, `SELECT title, date, tags, summary, content, published, revision FROM posts WHERE slug = ?`, slug).
 		Scan(&title, &date, &tags, &summary, &content, &published, &revision)
 	if err != nil {
 		return BlogPost{}, err
@@ -213,7 +228,11 @@ func (s *Store) GetPostAny(slug string) (BlogPost, error) {
 
 // ListAllPosts returns every post (published and drafts) ordered by date descending.
 func (s *Store) ListAllPosts() ([]BlogPost, error) {
-	rows, err := s.db.Query(`SELECT slug, title, date, tags, summary, content, published, revision FROM posts ORDER BY date DESC`)
+	return s.ListAllPostsContext(context.Background())
+}
+
+func (s *Store) ListAllPostsContext(ctx context.Context) ([]BlogPost, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT slug, title, date, tags, summary, content, published, revision FROM posts ORDER BY date DESC, slug ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -249,11 +268,18 @@ var ErrPostConflict = errors.New("post changed or slug is already in use; reload
 // SavePost creates a new post when Revision is zero, otherwise updates the loaded
 // OriginalSlug only if its revision still matches. Fetch the post again after saving.
 func (s *Store) SavePost(p BlogPost) error {
+	return s.SavePostContext(context.Background(), p)
+}
+
+func (s *Store) SavePostContext(ctx context.Context, p BlogPost) error {
 	if msg := ValidateSlug(p.Slug); msg != "" {
 		return fmt.Errorf("%s", msg)
 	}
 	if strings.TrimSpace(p.Title) == "" {
 		return fmt.Errorf("title is required")
+	}
+	if p.Date == "" {
+		p.Date = time.Now().UTC().Format("2006-01-02")
 	}
 	if p.Date != "" {
 		if _, err := time.Parse("2006-01-02", p.Date); err != nil {
@@ -265,13 +291,13 @@ func (s *Store) SavePost(p BlogPost) error {
 		tags[i] = strings.ToLower(t)
 	}
 	tagString := "," + strings.Join(tags, ",") + ","
-	tx, err := s.db.Begin()
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	var occupied int
-	if err := tx.QueryRow("SELECT count(*) FROM post_redirects WHERE slug = ?", p.Slug).Scan(&occupied); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM post_redirects WHERE slug = ?", p.Slug).Scan(&occupied); err != nil {
 		return err
 	}
 	if occupied > 0 {
@@ -281,7 +307,7 @@ func (s *Store) SavePost(p BlogPost) error {
 		if p.OriginalSlug != "" {
 			return ErrPostConflict
 		}
-		result, err := tx.Exec(`INSERT INTO posts (slug,title,date,tags,summary,content,published) VALUES (?,?,?,?,?,?,?) ON CONFLICT(slug) DO NOTHING`, p.Slug, p.Title, p.Date, tagString, p.Summary, p.Content, p.Published)
+		result, err := tx.ExecContext(ctx, `INSERT INTO posts (slug,title,date,tags,summary,content,published) VALUES (?,?,?,?,?,?,?) ON CONFLICT(slug) DO NOTHING`, p.Slug, p.Title, p.Date, tagString, p.Summary, p.Content, p.Published)
 		if err != nil {
 			return err
 		}
@@ -297,14 +323,14 @@ func (s *Store) SavePost(p BlogPost) error {
 			return ErrPostConflict
 		}
 		if p.Slug != p.OriginalSlug {
-			if err := tx.QueryRow("SELECT count(*) FROM posts WHERE slug = ?", p.Slug).Scan(&occupied); err != nil {
+			if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM posts WHERE slug = ?", p.Slug).Scan(&occupied); err != nil {
 				return err
 			}
 			if occupied > 0 {
 				return ErrPostConflict
 			}
 		}
-		result, err := tx.Exec(`UPDATE posts SET slug=?,title=?,date=?,tags=?,summary=?,content=?,published=?,revision=revision+1 WHERE slug=? AND revision=?`, p.Slug, p.Title, p.Date, tagString, p.Summary, p.Content, p.Published, p.OriginalSlug, p.Revision)
+		result, err := tx.ExecContext(ctx, `UPDATE posts SET slug=?,title=?,date=?,tags=?,summary=?,content=?,published=?,revision=revision+1 WHERE slug=? AND revision=?`, p.Slug, p.Title, p.Date, tagString, p.Summary, p.Content, p.Published, p.OriginalSlug, p.Revision)
 		if err != nil {
 			return err
 		}
@@ -316,10 +342,10 @@ func (s *Store) SavePost(p BlogPost) error {
 			return ErrPostConflict
 		}
 		if p.Slug != p.OriginalSlug {
-			if _, err := tx.Exec("UPDATE post_redirects SET target=? WHERE target=?", p.Slug, p.OriginalSlug); err != nil {
+			if _, err := tx.ExecContext(ctx, "UPDATE post_redirects SET target=? WHERE target=?", p.Slug, p.OriginalSlug); err != nil {
 				return err
 			}
-			if _, err := tx.Exec("INSERT INTO post_redirects (slug,target) VALUES (?,?)", p.OriginalSlug, p.Slug); err != nil {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO post_redirects (slug,target) VALUES (?,?)", p.OriginalSlug, p.Slug); err != nil {
 				return err
 			}
 		}
@@ -329,22 +355,30 @@ func (s *Store) SavePost(p BlogPost) error {
 
 // ResolvePostRedirect returns the current slug only when the destination is published.
 func (s *Store) ResolvePostRedirect(slug string) (string, error) {
+	return s.ResolvePostRedirectContext(context.Background(), slug)
+}
+
+func (s *Store) ResolvePostRedirectContext(ctx context.Context, slug string) (string, error) {
 	var target string
-	err := s.db.QueryRow(`SELECT r.target FROM post_redirects r JOIN posts p ON p.slug=r.target WHERE r.slug=? AND p.published=1`, slug).Scan(&target)
+	err := s.db.QueryRowContext(ctx, `SELECT r.target FROM post_redirects r JOIN posts p ON p.slug=r.target WHERE r.slug=? AND p.published=1`, slug).Scan(&target)
 	return target, err
 }
 
 // DeletePost removes a post and its previous URLs atomically.
 func (s *Store) DeletePost(slug string) error {
-	tx, err := s.db.Begin()
+	return s.DeletePostContext(context.Background(), slug)
+}
+
+func (s *Store) DeletePostContext(ctx context.Context, slug string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec("DELETE FROM post_redirects WHERE target=?", slug); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM post_redirects WHERE target=?", slug); err != nil {
 		return err
 	}
-	if _, err := tx.Exec("DELETE FROM posts WHERE slug=?", slug); err != nil {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM posts WHERE slug=?", slug); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -352,14 +386,22 @@ func (s *Store) DeletePost(slug string) error {
 
 // SaveImage inserts image metadata into the database.
 func (s *Store) SaveImage(img Image) error {
-	_, err := s.db.Exec(`INSERT INTO images (filename, original_name, width, height, size, uploaded_at) VALUES (?, ?, ?, ?, ?, ?)`,
+	return s.SaveImageContext(context.Background(), img)
+}
+
+func (s *Store) SaveImageContext(ctx context.Context, img Image) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO images (filename, original_name, width, height, size, uploaded_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		img.Filename, img.OriginalName, img.Width, img.Height, img.Size, img.UploadedAt)
 	return err
 }
 
 // ListImages returns all images ordered by upload time descending.
 func (s *Store) ListImages() ([]Image, error) {
-	rows, err := s.db.Query(`SELECT filename, original_name, width, height, size, uploaded_at FROM images ORDER BY uploaded_at DESC`)
+	return s.ListImagesContext(context.Background())
+}
+
+func (s *Store) ListImagesContext(ctx context.Context) ([]Image, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT filename, original_name, width, height, size, uploaded_at FROM images ORDER BY uploaded_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -378,19 +420,101 @@ func (s *Store) ListImages() ([]Image, error) {
 
 // DeleteImage removes image metadata from the database.
 func (s *Store) DeleteImage(filename string) error {
-	_, err := s.db.Exec(`DELETE FROM images WHERE filename = ?`, filename)
+	return s.DeleteImageContext(context.Background(), filename)
+}
+
+func (s *Store) DeleteImageContext(ctx context.Context, filename string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM images WHERE filename = ?`, filename)
 	return err
 }
 
 // ParseTags splits a comma-delimited tag string (e.g. ",go,web,") into a slice.
 func ParseTags(tagString string) []string {
-	tagString = strings.Trim(tagString, ",")
-	if tagString == "" {
-		return nil
+	var tags []string
+	seen := map[string]bool{}
+	for _, value := range strings.Split(tagString, ",") {
+		tag := normalizeTag(value)
+		if tag != "" && !seen[tag] {
+			tags = append(tags, tag)
+			seen[tag] = true
+		}
 	}
-	parts := strings.Split(tagString, ",")
-	for i := range parts {
-		parts[i] = strings.TrimSpace(parts[i])
+	return tags
+}
+
+func hasTag(tags []string, tag string) bool {
+	for _, value := range tags {
+		if normalizeTag(value) == normalizeTag(tag) {
+			return true
+		}
 	}
-	return parts
+	return false
+}
+
+// ListSummariesContext omits article bodies.
+func (s *Store) ListSummariesContext(ctx context.Context) ([]BlogPost, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT slug,title,date,tags,summary,published,revision FROM posts WHERE published=1 ORDER BY date DESC,slug ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var posts []BlogPost
+	for rows.Next() {
+		var p BlogPost
+		var tags string
+		if err := rows.Scan(&p.Slug, &p.Title, &p.Date, &tags, &p.Summary, &p.Published, &p.Revision); err != nil {
+			return nil, err
+		}
+		p.Tags = ParseTags(tags)
+		p.Link = "/blog/" + p.Slug
+		p.OriginalSlug = p.Slug
+		posts = append(posts, p)
+	}
+	return posts, rows.Err()
+}
+
+func (s *Store) ListAdminPageContext(ctx context.Context, offset, limit int) ([]BlogPost, bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT slug,title,date,tags,summary,published,revision FROM posts ORDER BY date DESC,slug ASC LIMIT ? OFFSET ?`, limit+1, offset)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	var posts []BlogPost
+	for rows.Next() {
+		var p BlogPost
+		var tags string
+		if err := rows.Scan(&p.Slug, &p.Title, &p.Date, &tags, &p.Summary, &p.Published, &p.Revision); err != nil {
+			return nil, false, err
+		}
+		p.Tags = ParseTags(tags)
+		p.Link = "/blog/" + p.Slug
+		p.OriginalSlug = p.Slug
+		posts = append(posts, p)
+	}
+	more := len(posts) > limit
+	if more {
+		posts = posts[:limit]
+	}
+	return posts, more, rows.Err()
+}
+
+func (s *Store) ListImagesPageContext(ctx context.Context, offset, limit int) ([]Image, bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT filename,original_name,width,height,size,uploaded_at FROM images ORDER BY uploaded_at DESC,filename ASC LIMIT ? OFFSET ?`, limit+1, offset)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	var images []Image
+	for rows.Next() {
+		var img Image
+		if err := rows.Scan(&img.Filename, &img.OriginalName, &img.Width, &img.Height, &img.Size, &img.UploadedAt); err != nil {
+			return nil, false, err
+		}
+		images = append(images, img)
+	}
+	more := len(images) > limit
+	if more {
+		images = images[:limit]
+	}
+	return images, more, rows.Err()
 }

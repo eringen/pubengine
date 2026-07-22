@@ -35,6 +35,7 @@ type SiteConfig struct {
 	IdleTimeout       time.Duration // Default 60 seconds
 	ShutdownTimeout   time.Duration // Default 10 seconds
 
+	PageSize     int           // Zero preserves full-content list views; positive enables paginated summaries.
 	PostCacheTTL time.Duration // Post cache TTL (default 5min)
 }
 
@@ -109,6 +110,9 @@ func (c SiteConfig) validate() error {
 	}
 	if len(c.SessionSecret) < 32 || strings.Contains(strings.ToLower(c.SessionSecret), "changeme") {
 		return fmt.Errorf("pubengine: SessionSecret must be a random signing key of at least 32 bytes")
+	}
+	if c.PageSize < 0 || c.PageSize > 200 {
+		return fmt.Errorf("pubengine: PageSize must be between 0 and 200")
 	}
 	if c.PostCacheTTL < 0 {
 		return fmt.Errorf("pubengine: PostCacheTTL must not be negative")

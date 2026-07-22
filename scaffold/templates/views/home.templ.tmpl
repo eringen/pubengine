@@ -67,9 +67,9 @@ templ BlogSection(posts []pubengine.BlogPost, activeTag string, tags []string) {
 			for _, post := range posts {
 				<article class="group">
 					<a
-						href={ templ.SafeURL(post.Link + "/") }
-						sender={ "content get: " + post.Link + "/?partial=post apply: outer" }
-						push-url={ post.Link + "/" }
+						href={ templ.SafeURL(pubengine.PostPath(post.Slug)) }
+						sender={ "content get: " + pubengine.PostPath(post.Slug) + "?partial=post apply: outer" }
+						push-url={ pubengine.PostPath(post.Slug) }
 						class="block"
 					>
 						<h2 class="text-xl font-semibold group-hover:text-blue-600">
@@ -90,6 +90,7 @@ templ BlogSection(posts []pubengine.BlogPost, activeTag string, tags []string) {
 				</article>
 			}
 		</div>
+		@Pagination(pubengine.PaginationFromContext(ctx), "")
 	</div>
 }
 

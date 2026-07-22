@@ -148,6 +148,7 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 						<p class="text-gray-500">No posts yet. Create your first post!</p>
 					}
 				</div>
+				@Pagination(pubengine.PaginationFromContext(ctx), "")
 			</div>
 		</body>
 	</html>
@@ -351,6 +352,7 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 			<p class="text-gray-500 text-sm">No images uploaded yet.</p>
 		}
 	</div>
+	@Pagination(pubengine.PaginationFromContext(ctx), "postForm")
 }
 
 // AdminEditor keeps validation errors in a complete page.

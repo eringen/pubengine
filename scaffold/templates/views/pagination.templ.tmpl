@@ -1,0 +1,16 @@
+package views
+
+import "github.com/eringen/pubengine"
+
+templ Pagination(page pubengine.Pagination, receiver string) {
+ if page.Previous != "" || page.Next != "" {
+  <nav aria-label="Pagination" class="flex justify-between my-6">
+   if page.Previous != "" {
+    <a href={ templ.SafeURL(page.Previous) } if receiver != "" { sender={ receiver + " get: " + page.Previous + " apply: inner" } }>Previous</a>
+   }
+   if page.Next != "" {
+    <a href={ templ.SafeURL(page.Next) } if receiver != "" { sender={ receiver + " get: " + page.Next + " apply: inner" } }>Next</a>
+   }
+  </nav>
+ }
+}

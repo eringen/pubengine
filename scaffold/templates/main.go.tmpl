@@ -35,6 +35,7 @@ func run() error {
 			GoogleClientID:     pubengine.EnvOr("GOOGLE_CLIENT_ID", ""),
 			GoogleClientSecret: pubengine.EnvOr("GOOGLE_CLIENT_SECRET", ""),
 			GoogleAdminEmail:   pubengine.EnvOr("GOOGLE_ADMIN_EMAIL", ""),
+			PageSize: 20,
 			AnalyticsEnabled:   pubengine.EnvOr("ANALYTICS_ENABLED", "true") == "true",
 			AnalyticsDatabasePath: pubengine.EnvOr("ANALYTICS_DATABASE_PATH", "data/analytics.db"),
 		}

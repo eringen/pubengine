@@ -8,12 +8,21 @@ import (
 )
 
 func (a *App) handleHome(c echo.Context) error {
-	tag := c.QueryParam("tag")
-	posts, err := a.Cache.ListPosts(tag)
+	tag := normalizeTag(c.QueryParam("tag"))
+	var posts []BlogPost
+	var err error
+	if a.Config.PageSize > 0 {
+		offset := pageOffset(c, a.Config.PageSize)
+		var more bool
+		posts, more, err = a.Cache.ListPageContext(c.Request().Context(), tag, offset, a.Config.PageSize)
+		setPagination(c, a.Config.PageSize, offset, more)
+	} else {
+		posts, err = a.Cache.ListPostsContext(c.Request().Context(), tag)
+	}
 	if err != nil {
 		return err
 	}
-	tags, err := a.Cache.ListTags()
+	tags, err := a.Cache.ListTagsContext(c.Request().Context())
 	if err != nil {
 		return err
 	}
@@ -29,11 +38,11 @@ func (a *App) handleHome(c echo.Context) error {
 
 func (a *App) handlePost(c echo.Context) error {
 	slug := c.Param("slug")
-	post, err := a.Cache.GetPost(slug)
+	post, err := a.Cache.GetPostContext(c.Request().Context(), slug)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			if target, redirectErr := a.Store.ResolvePostRedirect(slug); redirectErr == nil {
-				location := "/blog/" + target + "/"
+			if target, redirectErr := a.Store.ResolvePostRedirectContext(c.Request().Context(), slug); redirectErr == nil {
+				location := PostPath(target)
 				if c.QueryParam("partial") == "post" {
 					location += "?partial=post"
 				}
@@ -45,7 +54,12 @@ func (a *App) handlePost(c echo.Context) error {
 		}
 		return err
 	}
-	posts, err := a.Cache.ListPosts("")
+	var posts []BlogPost
+	if a.Config.PageSize > 0 {
+		posts, err = a.Cache.RelatedContext(c.Request().Context(), post, 6)
+	} else {
+		posts, err = a.Cache.ListPostsContext(c.Request().Context(), "")
+	}
 	if err != nil {
 		return err
 	}
@@ -56,7 +70,7 @@ func (a *App) handlePost(c echo.Context) error {
 }
 
 func (a *App) handleSitemap(c echo.Context) error {
-	posts, err := a.Cache.ListPosts("")
+	posts, _, err := a.Cache.ListPageContext(c.Request().Context(), "", 0, 0)
 	if err != nil {
 		return err
 	}
@@ -64,7 +78,7 @@ func (a *App) handleSitemap(c echo.Context) error {
 }
 
 func (a *App) handleFeed(c echo.Context) error {
-	posts, err := a.Cache.ListPosts("")
+	posts, _, err := a.Cache.ListPageContext(c.Request().Context(), "", 0, 0)
 	if err != nil {
 		return err
 	}

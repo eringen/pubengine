@@ -181,7 +181,16 @@ func (a *App) handleImageList(c echo.Context) error {
 }
 
 func (a *App) renderImageList(c echo.Context) error {
-	images, err := a.Store.ListImages()
+	var images []Image
+	var err error
+	if a.Config.PageSize > 0 {
+		offset := pageOffset(c, a.Config.PageSize)
+		var more bool
+		images, more, err = a.Store.ListImagesPageContext(c.Request().Context(), offset, a.Config.PageSize)
+		setPagination(c, a.Config.PageSize, offset, more)
+	} else {
+		images, err = a.Store.ListImagesContext(c.Request().Context())
+	}
 	if err != nil {
 		return err
 	}
