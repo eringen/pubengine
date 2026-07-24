@@ -224,7 +224,7 @@ func (s *Store) SaveBotVisitContext(ctx context.Context, bv *BotVisit) error {
 func (s *Store) GetStats(from, to time.Time, hourly, monthly bool) (*Stats, error) {
 	ctx := context.Background()
 	stats := &Stats{
-		Period:        from.Format("2006-01-02") + " to " + to.Format("2006-01-02"),
+		Period:        from.Format("2006-01-02") + " to " + to.Add(-time.Nanosecond).Format("2006-01-02"),
 		TopPages:      []PageStat{},
 		LatestPages:   []LatestPageVisit{},
 		BrowserStats:  []DimensionStat{},
@@ -460,7 +460,7 @@ func (s *Store) GetStats(from, to time.Time, hourly, monthly bool) (*Stats, erro
 func (s *Store) GetBotStats(from, to time.Time, hourly, monthly bool) (*BotStats, error) {
 	ctx := context.Background()
 	stats := &BotStats{
-		Period:      from.Format("2006-01-02") + " to " + to.Format("2006-01-02"),
+		Period:      from.Format("2006-01-02") + " to " + to.Add(-time.Nanosecond).Format("2006-01-02"),
 		TopBots:     []DimensionStat{},
 		TopPages:    []PageStat{},
 		DailyVisits: []DailyView{},

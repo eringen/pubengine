@@ -76,7 +76,7 @@ func runNew(name string) error {
 		// Rename dotfiles (embed.FS cannot store files starting with ".").
 		switch filepath.Base(outPath) {
 		case "dotenv":
-			outPath = filepath.Join(filepath.Dir(outPath), ".env.example")
+			outPath = filepath.Join(filepath.Dir(outPath), ".env")
 		case "dotgitignore":
 			outPath = filepath.Join(filepath.Dir(outPath), ".gitignore")
 		}
@@ -103,7 +103,7 @@ func runNew(name string) error {
 		}
 
 		mode := os.FileMode(0o644)
-		if filepath.Base(outPath) == ".env.example" {
+		if filepath.Base(outPath) == ".env" {
 			mode = 0o600
 		}
 		f, err := os.OpenFile(outPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
@@ -121,6 +121,11 @@ func runNew(name string) error {
 			return fmt.Errorf("close %s: %w", outPath, err)
 		}
 
+		if filepath.Base(outPath) == ".env" {
+			if err := writeEnvExample(filepath.Join(filepath.Dir(outPath), ".env.example"), tmpl, data); err != nil {
+				return err
+			}
+		}
 		fmt.Printf("  created %s\n", outPath)
 		return nil
 	})
@@ -143,12 +148,12 @@ func runNew(name string) error {
 	fmt.Println("Done! Next steps:")
 	fmt.Println()
 	fmt.Printf("  cd %s\n", dirName)
-	fmt.Println("  cp .env.example .env")
+	fmt.Println("  # Unique credentials are in .env; keep that file private.")
 	fmt.Println("  npm install")
 	fmt.Println("  make run")
 	fmt.Println()
 	fmt.Printf("Edit views/*.templ to customize your templates, then run 'make templ'.\n")
-	fmt.Printf("Update ADMIN_PASSWORD and ADMIN_SESSION_SECRET in .env before deploying.\n")
+	fmt.Printf("Review your site settings in .env before deploying.\n")
 	return nil
 }
 
@@ -170,4 +175,19 @@ func randomSecret() (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+func writeEnvExample(path string, tmpl *template.Template, data scaffoldData) error {
+	data.AdminPassword = ""
+	data.SessionSecret = ""
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	if err := tmpl.Execute(file, data); err != nil {
+		file.Close()
+		os.Remove(path)
+		return err
+	}
+	return file.Close()
 }

@@ -33,7 +33,11 @@ func (a *App) handlePost(c echo.Context) error {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			if target, redirectErr := a.Store.ResolvePostRedirect(slug); redirectErr == nil {
-				return c.Redirect(http.StatusMovedPermanently, "/blog/"+target+"/")
+				location := "/blog/" + target + "/"
+				if c.QueryParam("partial") == "post" {
+					location += "?partial=post"
+				}
+				return c.Redirect(http.StatusMovedPermanently, location)
 			} else if redirectErr != sql.ErrNoRows {
 				return redirectErr
 			}

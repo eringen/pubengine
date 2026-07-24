@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/labstack/echo/v4"
 )
 
 // SiteConfig holds all configuration for a pubengine site.
@@ -95,8 +97,14 @@ func WithStaticDir(dir string) Option {
 	}
 }
 
+// WithIPExtractor configures which proxies may supply a client's IP address.
+// Use echo.ExtractIPDirect() when the app is reachable without a trusted proxy.
+func WithIPExtractor(extractor echo.IPExtractor) Option {
+	return func(a *App) { a.Echo.IPExtractor = extractor }
+}
+
 func (c SiteConfig) validate() error {
-	if strings.TrimSpace(c.AdminPassword) == "" || strings.EqualFold(c.AdminPassword, "changeme") {
+	if strings.TrimSpace(c.AdminPassword) == "" || strings.EqualFold(strings.TrimSpace(c.AdminPassword), "changeme") {
 		return fmt.Errorf("pubengine: set AdminPassword to a non-placeholder password")
 	}
 	if len(c.SessionSecret) < 32 || strings.Contains(strings.ToLower(c.SessionSecret), "changeme") {

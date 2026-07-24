@@ -101,3 +101,30 @@ func TestRenderFailuresDoNotCommitSuccess(t *testing.T) {
 		t.Fatal("render limit bypassed")
 	}
 }
+
+func TestConfiguredIPExtractorSurvivesMiddlewareSetup(t *testing.T) {
+	a := New(SiteConfig{}, ViewFuncs{}, WithIPExtractor(echo.ExtractIPDirect()))
+	a.setupMiddleware()
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.0.2.10:1234"
+	req.Header.Set("X-Forwarded-For", "203.0.113.22")
+	if got := a.Echo.NewContext(req, httptest.NewRecorder()).RealIP(); got != "192.0.2.10" {
+		t.Fatal(got)
+	}
+}
+
+func TestCustomCachePoliciesAndLLMSArePreserved(t *testing.T) {
+	a := testHTTPApp(t)
+	a.Echo.GET("/private/", func(c echo.Context) error {
+		c.Response().Header().Set("Cache-Control", "private, no-store")
+		return c.String(200, "private")
+	})
+	a.Echo.GET("/llms.txt", func(c echo.Context) error { return c.String(200, "site info") })
+	for path, want := range map[string]string{"/private/": "private, no-store", "/llms.txt": "public, max-age=86400"} {
+		r := httptest.NewRecorder()
+		a.Echo.ServeHTTP(r, httptest.NewRequest("GET", path, nil))
+		if r.Code != 200 || r.Header().Get("Cache-Control") != want {
+			t.Fatal(path, r.Code, r.Header())
+		}
+	}
+}

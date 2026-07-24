@@ -1,4 +1,4 @@
-# Load .env if it exists (copy .env.example to .env to get started).
+# The scaffold creates a private .env with unique credentials.
 -include .env
 export
 
@@ -8,16 +8,17 @@ TAILWIND_INPUT := assets/tailwind.css
 TAILWIND_OUTPUT := public/tailwind.css
 JS_INPUT := src/app.js
 JS_OUTPUT := public/app.min.js
-TEMPL := $(shell go env GOPATH)/bin/templ
+TEMPL := go run github.com/a-h/templ/cmd/templ@v0.3.960
+VIEW_SOURCES := $(wildcard views/*.templ views/*.go)
 
 .PHONY: css css-prod js templ run prod test build-linux
 
 css: $(TAILWIND_OUTPUT)
 
-$(TAILWIND_OUTPUT): $(TAILWIND_INPUT) tailwind.config.js package-lock.json | $(TAILWINDCSS)
+$(TAILWIND_OUTPUT): $(TAILWIND_INPUT) $(VIEW_SOURCES) tailwind.config.js package-lock.json | $(TAILWINDCSS)
 	$(TAILWINDCSS) -i $(TAILWIND_INPUT) -o $(TAILWIND_OUTPUT) --minify
 
-css-prod: $(TAILWIND_INPUT) tailwind.config.js package-lock.json | $(TAILWINDCSS)
+css-prod: $(TAILWIND_INPUT) $(VIEW_SOURCES) tailwind.config.js package-lock.json | $(TAILWINDCSS)
 	NODE_ENV=production $(TAILWINDCSS) -i $(TAILWIND_INPUT) -o $(TAILWIND_OUTPUT) --minify
 
 js: $(JS_OUTPUT)

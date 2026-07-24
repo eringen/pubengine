@@ -17,11 +17,13 @@ const sessionName = "admin_session"
 func (a *App) setupMiddleware() {
 	e := a.Echo
 
-	e.IPExtractor = echo.ExtractIPFromXFFHeader(
-		echo.TrustLoopback(true),
-		echo.TrustLinkLocal(false),
-		echo.TrustPrivateNet(true),
-	)
+	if e.IPExtractor == nil {
+		e.IPExtractor = echo.ExtractIPFromXFFHeader(
+			echo.TrustLoopback(true),
+			echo.TrustLinkLocal(false),
+			echo.TrustPrivateNet(true),
+		)
+	}
 
 	e.HTTPErrorHandler = a.httpErrorHandler
 
@@ -104,6 +106,9 @@ func cacheControlMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			case status >= 400, c.Request().Method != http.MethodGet && c.Request().Method != http.MethodHead,
 				strings.HasPrefix(path, "/admin"), strings.HasPrefix(path, "/api/"):
 				c.Response().Header().Set("Cache-Control", "no-store")
+			case c.Response().Header().Get("Cache-Control") != "":
+				// Honor an application's explicit policy on successful public responses.
+				return
 			case path == "/llms.txt":
 				c.Response().Header().Set("Cache-Control", "public, max-age=86400")
 			default:

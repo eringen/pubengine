@@ -1,8 +1,9 @@
 package main
 
 import (
-	"log"
 	"context"
+	"log"
+	"os"
 	"os/signal"
 	"syscall"
 
@@ -12,23 +13,30 @@ import (
 )
 
 func main() {
-	ctx,stop:=signal.NotifyContext(context.Background(),syscall.SIGINT,syscall.SIGTERM)
+	if err := run(); err != nil {
+		log.Print(err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	app := pubengine.New(
 		pubengine.SiteConfig{
-			Name:          pubengine.EnvOr("SITE_NAME", "{{.SiteName}}"),
-			URL:           pubengine.EnvOr("SITE_URL", "http://localhost:3000"),
-			Description:   pubengine.EnvOr("SITE_DESCRIPTION", "A blog powered by pubengine"),
-			Author:        pubengine.EnvOr("SITE_AUTHOR", ""),
-			Addr:          pubengine.EnvOr("ADDR", ":3000"),
-			DatabasePath:  pubengine.EnvOr("DATABASE_PATH", "data/blog.db"),
-			AdminPassword: pubengine.MustEnv("ADMIN_PASSWORD"),
-			SessionSecret: pubengine.MustEnv("ADMIN_SESSION_SECRET"),
-			CookieSecure:  pubengine.EnvOr("COOKIE_SECURE", "") == "true",
+			Name:               pubengine.EnvOr("SITE_NAME", "{{.SiteName}}"),
+			URL:                pubengine.EnvOr("SITE_URL", "http://localhost:3000"),
+			Description:        pubengine.EnvOr("SITE_DESCRIPTION", "A blog powered by pubengine"),
+			Author:             pubengine.EnvOr("SITE_AUTHOR", ""),
+			Addr:               pubengine.EnvOr("ADDR", ":3000"),
+			DatabasePath:       pubengine.EnvOr("DATABASE_PATH", "data/blog.db"),
+			AdminPassword:      pubengine.MustEnv("ADMIN_PASSWORD"),
+			SessionSecret:      pubengine.MustEnv("ADMIN_SESSION_SECRET"),
+			CookieSecure:       pubengine.EnvOr("COOKIE_SECURE", "") == "true",
 			GoogleClientID:     pubengine.EnvOr("GOOGLE_CLIENT_ID", ""),
 			GoogleClientSecret: pubengine.EnvOr("GOOGLE_CLIENT_SECRET", ""),
 			GoogleAdminEmail:   pubengine.EnvOr("GOOGLE_ADMIN_EMAIL", ""),
-			AnalyticsEnabled: true,
+			AnalyticsEnabled:   true,
 		},
 		pubengine.ViewFuncs{
 			Home:             views.Home,
@@ -46,7 +54,5 @@ func main() {
 	)
 	defer app.Close()
 
-	if err := app.StartContext(ctx); err != nil {
-		log.Print(err)
-	}
+	return app.StartContext(ctx)
 }

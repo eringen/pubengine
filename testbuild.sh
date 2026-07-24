@@ -1,8 +1,5 @@
-rm -rf testsite
-go build -o pubengine ./cmd/pubengine/
-./pubengine new testsite
-cd testsite
-npm install
-cp .env.example .env
-go mod tidy
-make run
+#!/bin/sh
+# Includes temporary scaffold generation and compilation when templ is installed.
+set -eu
+go test ./...
+node scripts/analytics_test.cjs
