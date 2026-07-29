@@ -65,7 +65,8 @@ myblog/
 ├── Makefile
 ├── package.json
 ├── tailwind.config.js
-└── .env.example
+├── .env                 # Private generated credentials (ignored by Git)
+└── .env.example         # Shareable settings with blank credentials
 ```
 
 ### Run it
@@ -74,9 +75,25 @@ myblog/
 go mod tidy
 npm install
 make run
+# Unique admin credentials are in the generated .env.
 ```
 
 Your blog is running at `http://localhost:3000`. Admin dashboard at `/admin/`.
+
+## Upgrading existing sites
+
+The correctness fixes change a few integration points:
+
+- Set a unique admin password and a random `SessionSecret` of at least 32 bytes. Known scaffold placeholders are rejected. Session cookies are **signed**, not encrypted. Rotating the signing key logs out existing sessions.
+- New scaffolds create a private, ignored `.env` with unique credentials and a shareable `.env.example` with blank credential fields. Keep `.env` private; do not replace it with the blank example.
+- `SavePost` now creates when `Revision == 0`. To edit, fetch the post with `GetPostAny`, modify it, and save its `OriginalSlug` and `Revision` unchanged. Fetch again after a successful save. Duplicate slugs and stale revisions return `ErrPostConflict`. Renames retain redirects to published destinations; previous slugs stay reserved until the post is deleted.
+- Existing admin templates must submit hidden `original_slug` and `revision` fields and display `post.Error`. Copy the updated `AdminFormPartial` scaffold if needed. Validation failures return the submitted content; conflicts return HTTP 409.
+- Deploy the updated analytics client and change its script URL to `/public/analytics.js?v=2`. The collector requires `event` (`view` or `duration`) and a `page_view_id`; older ambiguous beacons are rejected. If calling the analytics Go API directly, use `store.HashIP` and `store.GenerateVisitorID` so hashing is scoped to the installation.
+- Replace query-value uses of `PathEscape` with `QueryEscape`. Update the scaffold's `JsonLD` component to use `templ.JSONScript` and include your custom `/public/app.min.js` bundle.
+- Prefer `StartContext(ctx)` with a signal-aware context. `Shutdown(ctx)` drains requests; `Close()` uses the configured grace period. Both stop background workers and close databases. Create a new `App` after shutdown. HTTP timeouts are configurable through `SiteConfig`.
+- For explicit proxy trust, pass `WithIPExtractor(...)`, for example `echo.ExtractIPDirect()` without a proxy, or an Echo extractor configured for your proxy CIDRs.
+
+Database upgrades run automatically. Back up both databases and uploaded files before upgrading. The new schemas add post revisions/redirects and analytics page-view IDs; do not run older binaries against an upgraded analytics schema. Framework assets and public pages now revalidate instead of retaining long-lived cached copies. Copies already cached under the former policy cannot be recalled; version asset URLs when deploying this upgrade. `/llms.txt` retains a one-day cache policy.
 
 ## Usage
 
@@ -144,7 +161,7 @@ type ViewFuncs struct {
     PostPartial      func(post BlogPost, posts []BlogPost, siteURL string) templ.Component
 
     // Admin pages
-    AdminLogin       func(showError bool, csrfToken string, googleLoginURL string) templ.Component
+    AdminLogin       func(errorMsg string, csrfToken string, googleLoginURL string) templ.Component
     AdminDashboard   func(posts []BlogPost, message string, csrfToken string) templ.Component
     AdminFormPartial func(post BlogPost, csrfToken string) templ.Component
     AdminImages      func(images []Image, csrfToken string) templ.Component
@@ -155,7 +172,7 @@ type ViewFuncs struct {
 }
 ```
 
-The framework handles when to call full vs. partial renders based on talkDOM headers automatically.
+The framework selects partial renders using the `partial` query parameter in the scaffold’s talkDOM requests.
 
 ### SiteConfig
 
@@ -172,12 +189,17 @@ All configuration in one struct:
 | `AnalyticsEnabled` | `bool` | `false` | Enable built in analytics |
 | `AnalyticsDatabasePath` | `string` | `"data/analytics.db"` | Analytics SQLite path |
 | `AdminPassword` | `string` | **required** | Admin login password |
-| `SessionSecret` | `string` | **required** | Session cookie encryption secret |
+| `SessionSecret` | `string` | **required** | Session cookie signing key (minimum 32 bytes) |
 | `CookieSecure` | `bool` | `false` | Set `true` when behind HTTPS |
 | `GoogleClientID` | `string` | `""` | Google OAuth client ID (optional) |
 | `GoogleClientSecret` | `string` | `""` | Google OAuth client secret (optional) |
 | `GoogleAdminEmail` | `string` | `""` | Allowed Google email for admin login (optional) |
 | `PostCacheTTL` | `time.Duration` | `5m` | In memory post cache TTL |
+| `ReadHeaderTimeout` | `time.Duration` | `5s` | Limit for reading HTTP headers |
+| `ReadTimeout` | `time.Duration` | `30s` | Limit for reading an HTTP request |
+| `WriteTimeout` | `time.Duration` | `30s` | Limit for writing an HTTP response |
+| `IdleTimeout` | `time.Duration` | `1m` | Keep-alive idle timeout |
+| `ShutdownTimeout` | `time.Duration` | `10s` | Grace period used by `Close` |
 
 ### Options
 
@@ -200,6 +222,7 @@ The `App` struct exposes the underlying components for advanced use:
 
 ```go
 app := pubengine.New(cfg, views)
+// Store and Cache are initialized when Start or StartContext begins.
 
 app.Config    // SiteConfig
 app.Echo      // *echo.Echo, the HTTP server
@@ -222,6 +245,9 @@ type BlogPost struct {
     Slug      string     // "my-post"
     Content   string     // Markdown source
     Published bool
+    OriginalSlug string // Loaded identity for edits
+    Revision int64      // Concurrency token; zero for creates
+    Error string        // Editor error, not persisted
 }
 ```
 
@@ -364,7 +390,7 @@ pubengine includes a built in, privacy first analytics system. No cookies, no th
 
 ### How it works
 
-IP addresses are hashed with a salted SHA-256 (salt rotates, stored in DB). Visitor IDs are derived from IP + User Agent hash (no cookies). Bot traffic is detected and tracked separately. The system respects Do Not Track (DNT) headers. Data retention is configurable with automatic cleanup (default: 365 days). All data stays in your SQLite database.
+IP addresses are hashed with a salted SHA-256. Each installation has its own persistent salt stored in its database; the salt does not rotate automatically. Visitor IDs are derived from IP + User Agent hash (no cookies). Bot traffic is detected and tracked separately. The system respects Do Not Track (DNT) headers. The App uses automatic cleanup with 365-day retention. Standalone analytics stores can configure their cleanup scheduler. All data stays in your SQLite database.
 
 ### Enabling analytics
 
@@ -381,10 +407,10 @@ pubengine.SiteConfig{
 The framework ships `analytics.js` as an embedded asset, automatically served at `/public/analytics.js`. Include it in your template `<head>`:
 
 ```html
-<script src="/public/analytics.js" defer></script>
+<script src="/public/analytics.js?v=2" defer></script>
 ```
 
-The script tracks page views, time on page, and handles talkDOM navigation. It uses `navigator.sendBeacon` for reliable unload tracking.
+The script tracks page views and duration with explicit event types and page-view IDs, and handles talkDOM navigation. It uses `navigator.sendBeacon` for unload tracking, with a fetch fallback. Delivery is best effort. Bot counts cover collector submissions, not every crawler request to the site.
 
 ### Dashboard
 
@@ -445,7 +471,7 @@ pubengine configures a production ready middleware stack:
 5. **Session** uses cookie based sessions (gorilla/sessions, 12 hour expiry)
 6. **CSRF** provides token based protection (skipped for analytics endpoint)
 7. **Trailing slash** enforces consistent URL format
-8. **Cache-Control** sets static assets to 1 year immutable, pages to 1 hour, admin to no-store
+8. **Cache-Control** sets stable assets and public pages to revalidate, admin/API/error responses to no-store
 
 ## Database
 
@@ -521,7 +547,7 @@ posts, _ := store.ListAllPosts()          // including drafts
 post, _  := store.GetPostAny("my-slug")  // regardless of published status
 
 // Write operations
-store.SavePost(post)                      // insert or replace
+store.SavePost(post)                      // create, or update the fetched revision
 store.DeletePost("my-slug")              // delete by slug
 ```
 
@@ -636,7 +662,7 @@ npm run build        # Build both CSS and JS
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `ADMIN_PASSWORD` | yes | | Admin login password |
-| `ADMIN_SESSION_SECRET` | yes | | Session encryption secret (32+ chars) |
+| `ADMIN_SESSION_SECRET` | yes | | Random cookie signing key (at least 32 bytes) |
 | `SITE_NAME` | no | `Blog` | Site name for nav, RSS, JSON-LD |
 | `SITE_URL` | no | `http://localhost:3000` | Canonical URL for sitemap and OpenGraph |
 | `SITE_DESCRIPTION` | no | `""` | Description for RSS and meta tags |
