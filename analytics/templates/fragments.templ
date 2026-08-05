@@ -101,8 +101,9 @@ templ Chart(data []DailyViewViewModel) {
 	} else {
 		<div class="chart-container">
 			<div class="flex items-end h-44 gap-1 pt-5">
+				{{ maximum := maxViews(data) }}
 				for _, item := range data {
-					@ChartBar(item, maxViews(data))
+					@ChartBar(item, maximum)
 				}
 			</div>
 		</div>
@@ -129,8 +130,9 @@ templ TopPagesSection(pages []PageStatViewModel) {
 			<h2>Top Pages</h2>
 			<table class="data-table">
 				<tbody>
+					{{ maximum := maxPageViews(pages) }}
 					for _, page := range pages {
-						@PageRow(page, maxPageViews(pages))
+						@PageRow(page, maximum)
 					}
 				</tbody>
 			</table>
@@ -145,8 +147,9 @@ templ BotTopPagesSection(pages []PageStatViewModel) {
 			<h2>Top Pages (Bot)</h2>
 			<table class="data-table">
 				<tbody>
+					{{ maximum := maxPageViews(pages) }}
 					for _, page := range pages {
-						@PageRow(page, maxPageViews(pages))
+						@PageRow(page, maximum)
 					}
 				</tbody>
 			</table>
@@ -171,6 +174,7 @@ templ LatestPagesSection(pages []LatestPageVisitViewModel) {
 			<h2>Latest Visited Pages</h2>
 			<table class="data-table">
 				<tbody>
+					
 					for _, page := range pages {
 						@LatestPageRow(page)
 					}
@@ -209,8 +213,9 @@ templ DimensionSection(title string, stats []DimensionStatViewModel) {
 			<h2>{ title }</h2>
 			<table class="data-table">
 				<tbody>
+					{{ maximum := maxDimensionCount(stats) }}
 					for _, stat := range stats {
-						@DimensionRow(stat, maxDimensionCount(stats))
+						@DimensionRow(stat, maximum)
 					}
 				</tbody>
 			</table>
@@ -346,6 +351,7 @@ func maxViews(data []DailyViewViewModel) int {
 
 func maxPageViews(pages []PageStatViewModel) int {
 	max := 0
+	
 	for _, page := range pages {
 		if page.Views > max {
 			max = page.Views

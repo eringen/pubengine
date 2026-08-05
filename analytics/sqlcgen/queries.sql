@@ -37,7 +37,7 @@ SELECT path, COUNT(*) AS views
 FROM visits
 WHERE timestamp >= ? AND timestamp < ?
 GROUP BY path
-ORDER BY views DESC
+ORDER BY views DESC, path ASC
 LIMIT 10;
 
 -- name: LatestPages :many
@@ -52,29 +52,33 @@ SELECT browser AS name, COUNT(*) AS count
 FROM visits
 WHERE timestamp >= ? AND timestamp < ?
 GROUP BY browser
-ORDER BY count DESC;
+ORDER BY count DESC, name ASC;
 
 -- name: OSStats :many
 SELECT os AS name, COUNT(*) AS count
 FROM visits
 WHERE timestamp >= ? AND timestamp < ?
 GROUP BY os
-ORDER BY count DESC;
+ORDER BY count DESC, name ASC;
 
 -- name: DeviceStats :many
 SELECT device AS name, COUNT(*) AS count
 FROM visits
 WHERE timestamp >= ? AND timestamp < ?
 GROUP BY device
-ORDER BY count DESC;
+ORDER BY count DESC, name ASC;
 
 -- name: ReferrerStats :many
-SELECT CAST(COALESCE(NULLIF(referrer, ''), 'Direct') AS TEXT) AS name,
-    COUNT(*) AS count
-FROM visits
-WHERE timestamp >= ? AND timestamp < ?
-GROUP BY 1
-ORDER BY count DESC;
+WITH counts AS (
+ SELECT CAST(COALESCE(NULLIF(referrer, ''), 'Direct') AS TEXT) AS name, COUNT(*) AS count
+ FROM visits WHERE timestamp >= ? AND timestamp < ? GROUP BY 1
+), ranked AS (
+ SELECT name,count,ROW_NUMBER() OVER (ORDER BY count DESC,name ASC) AS position_idx FROM counts
+)
+SELECT CAST(CASE WHEN position_idx <= 10 THEN name ELSE 'Other referrers' END AS TEXT) AS name,
+ CAST(SUM(count) AS INTEGER) AS count
+FROM ranked GROUP BY 1 ORDER BY count DESC,name ASC;
+
 
 -- name: DailyViews :many
 SELECT CAST(substr(timestamp, 1, 10) AS TEXT) AS date, COUNT(*) AS views
@@ -115,7 +119,7 @@ SELECT path, COUNT(*) AS views
 FROM bot_visits
 WHERE timestamp >= ? AND timestamp < ?
 GROUP BY path
-ORDER BY views DESC
+ORDER BY views DESC, path ASC
 LIMIT 10;
 
 -- name: DailyBotVisits :many
@@ -162,3 +166,8 @@ DELETE FROM bot_visits WHERE timestamp < ?;
 
 -- name: CountRealtimeVisitors :one
 SELECT COUNT(DISTINCT visitor_id) FROM visits WHERE timestamp >= ?;
+
+-- name: VisitTotals :one
+SELECT COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors,
+ CAST(COALESCE(AVG(CASE WHEN duration_sec > 0 THEN duration_sec END), 0) AS REAL) AS duration
+FROM visits WHERE timestamp >= ? AND timestamp < ?;

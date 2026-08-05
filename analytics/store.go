@@ -14,10 +14,12 @@ import (
 
 // Store provides database operations for analytics.
 type Store struct {
-	db     *sql.DB
-	q      *sqlcgen.Queries
-	saltMu sync.RWMutex
-	salt   string
+	db           *sql.DB
+	q            *sqlcgen.Queries
+	saltMu       sync.RWMutex
+	salt         string
+	statsReports reportCache[Stats]
+	botReports   reportCache[BotStats]
 }
 
 // NewStore creates a new analytics store.
@@ -123,27 +125,41 @@ func (s *Store) migrate() error {
 		return fmt.Errorf("unsupported analytics schema version %d", version)
 	}
 	if version < 2 {
-		rows, err := tx.Query("SELECT DISTINCT referrer FROM visits")
-		if err != nil {
-			return err
-		}
-		var refs []sql.NullString
-		for rows.Next() {
-			var ref sql.NullString
-			if err := rows.Scan(&ref); err != nil {
-				rows.Close()
+		var cursor int64
+		for {
+			rows, err := tx.Query("SELECT id,referrer FROM visits WHERE id>? ORDER BY id LIMIT 1000", cursor)
+			if err != nil {
 				return err
 			}
-			refs = append(refs, ref)
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return err
-		}
-		for _, ref := range refs {
-			if _, err := tx.Exec("UPDATE visits SET referrer=? WHERE referrer IS ?", CleanReferrer(ref.String), ref); err != nil {
+			type row struct {
+				id  int64
+				ref sql.NullString
+			}
+			var batch []row
+			for rows.Next() {
+				var r row
+				if err := rows.Scan(&r.id, &r.ref); err != nil {
+					rows.Close()
+					return err
+				}
+				batch = append(batch, r)
+			}
+			err = rows.Err()
+			rows.Close()
+			if err != nil {
 				return err
+			}
+			if len(batch) == 0 {
+				break
+			}
+			for _, r := range batch {
+				clean := CleanReferrer(r.ref.String)
+				if !r.ref.Valid || clean != r.ref.String {
+					if _, err := tx.Exec("UPDATE visits SET referrer=? WHERE id=?", clean, r.id); err != nil {
+						return err
+					}
+				}
+				cursor = r.id
 			}
 		}
 	}
@@ -222,243 +238,123 @@ func (s *Store) SaveBotVisitContext(ctx context.Context, bv *BotVisit) error {
 
 // GetStats returns aggregated statistics for the given time period.
 func (s *Store) GetStats(from, to time.Time, hourly, monthly bool) (*Stats, error) {
-	ctx := context.Background()
-	stats := &Stats{
-		Period:        from.Format("2006-01-02") + " to " + to.Add(-time.Nanosecond).Format("2006-01-02"),
-		TopPages:      []PageStat{},
-		LatestPages:   []LatestPageVisit{},
-		BrowserStats:  []DimensionStat{},
-		OSStats:       []DimensionStat{},
-		DeviceStats:   []DimensionStat{},
-		ReferrerStats: []DimensionStat{},
-		DailyViews:    []DailyView{},
-	}
+	return s.GetStatsContext(context.Background(), from, to, hourly, monthly)
+}
 
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	var firstErr error
-
-	setErr := func(err error) {
-		mu.Lock()
-		if firstErr == nil {
-			firstErr = err
-		}
-		mu.Unlock()
-	}
-
-	// Total views
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		count, err := s.q.CountVisits(ctx, from, to)
-		if err != nil {
-			setErr(fmt.Errorf("count views: %w", err))
-			return
-		}
-		mu.Lock()
-		stats.TotalViews = int(count)
-		mu.Unlock()
-	}()
-
-	// Unique visitors
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		count, err := s.q.CountUniqueVisitors(ctx, from, to)
-		if err != nil {
-			setErr(fmt.Errorf("count unique visitors: %w", err))
-			return
-		}
-		mu.Lock()
-		stats.UniqueVisitors = int(count)
-		mu.Unlock()
-	}()
-
-	// Average duration
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		avg, err := s.q.AvgDuration(ctx, from, to)
-		if err != nil {
-			setErr(fmt.Errorf("avg duration: %w", err))
-			return
-		}
-		if avg.Valid {
-			mu.Lock()
-			stats.AvgDuration = int(avg.Float64)
-			mu.Unlock()
-		}
-	}()
-
-	// Top pages
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		rows, err := s.q.TopPages(ctx, from, to)
-		if err != nil {
-			setErr(fmt.Errorf("top pages: %w", err))
-			return
-		}
-		pages := make([]PageStat, len(rows))
-		for i, r := range rows {
-			pages[i] = PageStat{Path: r.Path, Views: int(r.Views)}
-		}
-		mu.Lock()
-		stats.TopPages = pages
-		mu.Unlock()
-	}()
-
-	// Latest pages
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		rows, err := s.q.LatestPages(ctx, from, to)
-		if err != nil {
-			setErr(fmt.Errorf("latest pages: %w", err))
-			return
-		}
-		latest := make([]LatestPageVisit, len(rows))
-		for i, r := range rows {
-			latest[i] = LatestPageVisit{
-				Path:      r.Path,
-				Timestamp: r.Timestamp.Format("2006-01-02 15:04:05"),
-				Browser:   r.Browser,
-			}
-		}
-		mu.Lock()
-		stats.LatestPages = latest
-		mu.Unlock()
-	}()
-
-	// Browser stats
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		rows, err := s.q.BrowserStats(ctx, from, to)
-		if err != nil {
-			setErr(fmt.Errorf("browser stats: %w", err))
-			return
-		}
-		result := make([]DimensionStat, len(rows))
-		for i, r := range rows {
-			result[i] = DimensionStat{Name: r.Name, Count: int(r.Count)}
-		}
-		mu.Lock()
-		stats.BrowserStats = result
-		mu.Unlock()
-	}()
-
-	// OS stats
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		rows, err := s.q.OSStats(ctx, from, to)
-		if err != nil {
-			setErr(fmt.Errorf("os stats: %w", err))
-			return
-		}
-		result := make([]DimensionStat, len(rows))
-		for i, r := range rows {
-			result[i] = DimensionStat{Name: r.Name, Count: int(r.Count)}
-		}
-		mu.Lock()
-		stats.OSStats = result
-		mu.Unlock()
-	}()
-
-	// Device stats
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		rows, err := s.q.DeviceStats(ctx, from, to)
-		if err != nil {
-			setErr(fmt.Errorf("device stats: %w", err))
-			return
-		}
-		result := make([]DimensionStat, len(rows))
-		for i, r := range rows {
-			result[i] = DimensionStat{Name: r.Name, Count: int(r.Count)}
-		}
-		mu.Lock()
-		stats.DeviceStats = result
-		mu.Unlock()
-	}()
-
-	// Referrer stats
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		rows, err := s.q.ReferrerStats(ctx, from, to)
-		if err != nil {
-			setErr(fmt.Errorf("referrer stats: %w", err))
-			return
-		}
-		result := make([]DimensionStat, len(rows))
-		for i, r := range rows {
-			result[i] = DimensionStat{Name: r.Name, Count: int(r.Count)}
-		}
-		mu.Lock()
-		stats.ReferrerStats = result
-		mu.Unlock()
-	}()
-
-	// Daily/hourly/monthly views
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var result []DailyView
-		if hourly {
-			rows, err := s.q.HourlyViews(ctx, from, to)
+func (s *Store) GetStatsContext(ctx context.Context, from, to time.Time, hourly, monthly bool) (*Stats, error) {
+	key := reportKey{from, to, hourly, monthly}
+	value, err := s.statsReports.get(ctx, key, func() (*Stats, error) {
+		stats := &Stats{Period: from.Format("2006-01-02") + " to " + to.Add(-time.Nanosecond).Format("2006-01-02"), TopPages: []PageStat{}, LatestPages: []LatestPageVisit{}, BrowserStats: []DimensionStat{}, OSStats: []DimensionStat{}, DeviceStats: []DimensionStat{}, ReferrerStats: []DimensionStat{}, DailyViews: []DailyView{}}
+		err := s.readSnapshot(ctx, func(q *sqlcgen.Queries) error {
+			totals, err := q.VisitTotals(ctx, from, to)
 			if err != nil {
-				setErr(fmt.Errorf("hourly views: %w", err))
-				return
+				return err
 			}
-			sparse := make([]DailyView, len(rows))
-			for i, r := range rows {
-				sparse[i] = DailyView{Date: r.Date, Views: int(r.Views)}
-			}
-			result = fillHourlyGaps(from, sparse)
-		} else if monthly {
-			rows, err := s.q.MonthlyViews(ctx, from, to)
+			stats.TotalViews = int(totals.Views)
+			stats.UniqueVisitors = int(totals.Visitors)
+			stats.AvgDuration = int(totals.Duration)
+			pages, err := q.TopPages(ctx, from, to)
 			if err != nil {
-				setErr(fmt.Errorf("monthly views: %w", err))
-				return
+				return err
 			}
-			result = make([]DailyView, len(rows))
-			for i, r := range rows {
-				result[i] = DailyView{Date: r.Date, Views: int(r.Views)}
+			for _, p := range pages {
+				stats.TopPages = append(stats.TopPages, PageStat{Path: p.Path, Views: int(p.Views)})
 			}
-		} else {
-			rows, err := s.q.DailyViews(ctx, from, to)
+			latest, err := q.LatestPages(ctx, from, to)
 			if err != nil {
-				setErr(fmt.Errorf("daily views: %w", err))
-				return
+				return err
 			}
-			result = make([]DailyView, len(rows))
-			for i, r := range rows {
-				result[i] = DailyView{Date: r.Date, Views: int(r.Views)}
+			for _, p := range latest {
+				stats.LatestPages = append(stats.LatestPages, LatestPageVisit{Path: p.Path, Timestamp: p.Timestamp.Format("2006-01-02 15:04:05"), Browser: p.Browser})
 			}
-		}
-		mu.Lock()
-		if !hourly {
-			result = fillCalendarGaps(from, to, result, monthly)
-		}
-		stats.DailyViews = result
-		mu.Unlock()
-	}()
-
-	wg.Wait()
-
-	if firstErr != nil {
-		return nil, firstErr
+			browsers, err := q.BrowserStats(ctx, from, to)
+			if err != nil {
+				return err
+			}
+			for _, r := range browsers {
+				stats.BrowserStats = append(stats.BrowserStats, DimensionStat{Name: r.Name, Count: int(r.Count)})
+			}
+			systems, err := q.OSStats(ctx, from, to)
+			if err != nil {
+				return err
+			}
+			for _, r := range systems {
+				stats.OSStats = append(stats.OSStats, DimensionStat{Name: r.Name, Count: int(r.Count)})
+			}
+			devices, err := q.DeviceStats(ctx, from, to)
+			if err != nil {
+				return err
+			}
+			for _, r := range devices {
+				stats.DeviceStats = append(stats.DeviceStats, DimensionStat{Name: r.Name, Count: int(r.Count)})
+			}
+			refs, err := q.ReferrerStats(ctx, from, to)
+			if err != nil {
+				return err
+			}
+			for _, r := range refs {
+				stats.ReferrerStats = append(stats.ReferrerStats, DimensionStat{Name: r.Name, Count: int(r.Count)})
+			}
+			if hourly {
+				rows, err := q.HourlyViews(ctx, from, to)
+				if err != nil {
+					return err
+				}
+				for _, r := range rows {
+					stats.DailyViews = append(stats.DailyViews, DailyView{Date: r.Date, Views: int(r.Views)})
+				}
+				stats.DailyViews = fillHourlyGaps(from, stats.DailyViews)
+			} else if monthly {
+				rows, err := q.MonthlyViews(ctx, from, to)
+				if err != nil {
+					return err
+				}
+				for _, r := range rows {
+					stats.DailyViews = append(stats.DailyViews, DailyView{Date: r.Date, Views: int(r.Views)})
+				}
+			} else {
+				rows, err := q.DailyViews(ctx, from, to)
+				if err != nil {
+					return err
+				}
+				for _, r := range rows {
+					stats.DailyViews = append(stats.DailyViews, DailyView{Date: r.Date, Views: int(r.Views)})
+				}
+			}
+			if !hourly {
+				stats.DailyViews = fillCalendarGaps(from, to, stats.DailyViews, monthly)
+			}
+			return nil
+		})
+		return stats, err
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	return stats, nil
+	return cloneStats(value), nil
 }
 
 // GetBotStats returns aggregated bot statistics for the given time period.
 func (s *Store) GetBotStats(from, to time.Time, hourly, monthly bool) (*BotStats, error) {
-	ctx := context.Background()
+	return s.GetBotStatsContext(context.Background(), from, to, hourly, monthly)
+}
+func (s *Store) GetBotStatsContext(ctx context.Context, from, to time.Time, hourly, monthly bool) (*BotStats, error) {
+	value, err := s.botReports.get(ctx, reportKey{from, to, hourly, monthly}, func() (*BotStats, error) {
+		var stats *BotStats
+		err := s.readSnapshot(ctx, func(q *sqlcgen.Queries) error {
+			var err error
+			stats, err = s.buildBotStats(ctx, q, from, to, hourly, monthly)
+			return err
+		})
+		return stats, err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return cloneBotStats(value), nil
+}
+
+func (s *Store) buildBotStats(ctx context.Context, q *sqlcgen.Queries, from, to time.Time, hourly, monthly bool) (*BotStats, error) {
 	stats := &BotStats{
 		Period:      from.Format("2006-01-02") + " to " + to.Add(-time.Nanosecond).Format("2006-01-02"),
 		TopBots:     []DimensionStat{},
@@ -467,14 +363,14 @@ func (s *Store) GetBotStats(from, to time.Time, hourly, monthly bool) (*BotStats
 	}
 
 	// Total bot visits
-	count, err := s.q.CountBotVisits(ctx, from, to)
+	count, err := q.CountBotVisits(ctx, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("count bot visits: %w", err)
 	}
 	stats.TotalVisits = int(count)
 
 	// Top bots
-	topBots, err := s.q.TopBots(ctx, from, to)
+	topBots, err := q.TopBots(ctx, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("top bots: %w", err)
 	}
@@ -483,7 +379,7 @@ func (s *Store) GetBotStats(from, to time.Time, hourly, monthly bool) (*BotStats
 	}
 
 	// Top pages
-	topPages, err := s.q.TopBotPages(ctx, from, to)
+	topPages, err := q.TopBotPages(ctx, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("top bot pages: %w", err)
 	}
@@ -493,7 +389,7 @@ func (s *Store) GetBotStats(from, to time.Time, hourly, monthly bool) (*BotStats
 
 	// Daily/hourly/monthly bot visits
 	if hourly {
-		rows, err := s.q.HourlyBotVisits(ctx, from, to)
+		rows, err := q.HourlyBotVisits(ctx, from, to)
 		if err != nil {
 			return nil, fmt.Errorf("bot views: %w", err)
 		}
@@ -503,7 +399,7 @@ func (s *Store) GetBotStats(from, to time.Time, hourly, monthly bool) (*BotStats
 		}
 		stats.DailyVisits = fillHourlyGaps(from, sparse)
 	} else if monthly {
-		rows, err := s.q.MonthlyBotVisits(ctx, from, to)
+		rows, err := q.MonthlyBotVisits(ctx, from, to)
 		if err != nil {
 			return nil, fmt.Errorf("bot views: %w", err)
 		}
@@ -511,7 +407,7 @@ func (s *Store) GetBotStats(from, to time.Time, hourly, monthly bool) (*BotStats
 			stats.DailyVisits = append(stats.DailyVisits, DailyView{Date: r.Date, Views: int(r.Views)})
 		}
 	} else {
-		rows, err := s.q.DailyBotVisits(ctx, from, to)
+		rows, err := q.DailyBotVisits(ctx, from, to)
 		if err != nil {
 			return nil, fmt.Errorf("bot views: %w", err)
 		}
@@ -550,11 +446,23 @@ func (s *Store) CleanupOldVisits(retentionDays int) error {
 
 func (s *Store) cleanupOldVisits(ctx context.Context, retentionDays int) error {
 	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
-	if err := s.q.DeleteOldVisits(ctx, cutoff); err != nil {
-		return fmt.Errorf("cleanup visits: %w", err)
-	}
-	if err := s.q.DeleteOldBotVisits(ctx, cutoff); err != nil {
-		return fmt.Errorf("cleanup bot_visits: %w", err)
+	for _, table := range []string{"visits", "bot_visits"} {
+		for {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			result, err := s.db.ExecContext(ctx, "DELETE FROM "+table+" WHERE id IN (SELECT id FROM "+table+" WHERE timestamp < ? ORDER BY timestamp LIMIT 1000)", cutoff)
+			if err != nil {
+				return err
+			}
+			n, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if n < 1000 {
+				break
+			}
+		}
 	}
 	return nil
 }
@@ -583,8 +491,11 @@ func (s *Store) StartCleanupScheduler(retentionDays int, interval time.Duration)
 
 // GetRealtimeVisitors returns the number of unique visitors in the last 5 minutes.
 func (s *Store) GetRealtimeVisitors() (int, error) {
+	return s.GetRealtimeVisitorsContext(context.Background())
+}
+func (s *Store) GetRealtimeVisitorsContext(ctx context.Context) (int, error) {
 	cutoff := time.Now().UTC().Add(-5 * time.Minute)
-	count, err := s.q.CountRealtimeVisitors(context.Background(), cutoff)
+	count, err := s.q.CountRealtimeVisitors(ctx, cutoff)
 	return int(count), err
 }
 

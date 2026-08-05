@@ -44,6 +44,7 @@ type Querier interface {
 	// Duration update
 	UpdateVisitDuration(ctx context.Context, arg UpdateVisitDurationParams) error
 	UpsertSetting(ctx context.Context, key string, value string) error
+	VisitTotals(ctx context.Context, timestamp time.Time, timestamp_2 time.Time) (VisitTotalsRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

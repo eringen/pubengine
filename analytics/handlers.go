@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/eringen/pubengine/analytics/templates"
+	"github.com/eringen/pubengine/internal/htmlrender"
 	"github.com/labstack/echo/v4"
 )
 
@@ -201,13 +202,16 @@ func (h *Handler) GetStats(c echo.Context) error {
 
 	from, to := periodTimeRange(days, hourly)
 
-	stats, err := h.store.GetStats(from, to, hourly, monthly)
+	stats, err := h.store.GetStatsContext(c.Request().Context(), from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get stats: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
 	}
 
-	realtime, _ := h.store.GetRealtimeVisitors()
+	realtime, err := h.store.GetRealtimeVisitorsContext(c.Request().Context())
+	if err != nil {
+		return err
+	}
 
 	return c.JSON(http.StatusOK, StatsResponse{
 		Stats:      stats,
@@ -224,20 +228,23 @@ func (h *Handler) GetStatsFragment(c echo.Context) error {
 
 	from, to := periodTimeRange(days, hourly)
 
-	stats, err := h.store.GetStats(from, to, hourly, monthly)
+	stats, err := h.store.GetStatsContext(c.Request().Context(), from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get stats fragment: %v", err)
 		return c.HTML(http.StatusInternalServerError, "<div class='loading'>Error loading data</div>")
 	}
 
-	realtime, _ := h.store.GetRealtimeVisitors()
+	realtime, err := h.store.GetRealtimeVisitorsContext(c.Request().Context())
+	if err != nil {
+		return err
+	}
 
 	// Convert to view model
 	statsVM := convertStatsToViewModel(stats)
 
 	// Return only the stats content, not the period selector (to avoid duplication)
 	component := templates.StatsFragmentOnly(statsVM, realtime, days, hourly, monthly)
-	return component.Render(c.Request().Context(), c.Response())
+	return htmlrender.Render(c, component)
 }
 
 // BotStatsResponse is the JSON response for bot stats endpoint.
@@ -254,7 +261,7 @@ func (h *Handler) GetBotStats(c echo.Context) error {
 
 	from, to := periodTimeRange(days, hourly)
 
-	stats, err := h.store.GetBotStats(from, to, hourly, monthly)
+	stats, err := h.store.GetBotStatsContext(c.Request().Context(), from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get bot stats: %v", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal server error"})
@@ -274,7 +281,7 @@ func (h *Handler) GetBotStatsFragment(c echo.Context) error {
 
 	from, to := periodTimeRange(days, hourly)
 
-	stats, err := h.store.GetBotStats(from, to, hourly, monthly)
+	stats, err := h.store.GetBotStatsContext(c.Request().Context(), from, to, hourly, monthly)
 	if err != nil {
 		c.Logger().Errorf("Failed to get bot stats fragment: %v", err)
 		return c.HTML(http.StatusInternalServerError, "<div class='loading'>Error loading data</div>")
@@ -285,14 +292,14 @@ func (h *Handler) GetBotStatsFragment(c echo.Context) error {
 
 	// Return only the stats content, not the period selector (to avoid duplication)
 	component := templates.BotStatsFragmentOnly(statsVM, days, hourly, monthly)
-	return component.Render(c.Request().Context(), c.Response())
+	return htmlrender.Render(c, component)
 }
 
 // GetSetupFragment returns HTML fragment for setup tab (talkdom)
 func (h *Handler) GetSetupFragment(c echo.Context) error {
 	origin := c.Scheme() + "://" + c.Request().Host
 	component := templates.SetupContent(origin)
-	return component.Render(c.Request().Context(), c.Response())
+	return htmlrender.Render(c, component)
 }
 
 // parsePeriod parses the period query parameter
@@ -483,7 +490,7 @@ func (h *Handler) Dashboard(c echo.Context) error {
 
 // DashboardHTML serves the standalone HTML dashboard using templ.
 func (h *Handler) DashboardHTML(c echo.Context) error {
-	return templates.Dashboard().Render(c.Request().Context(), c.Response())
+	return htmlrender.Render(c, templates.Dashboard())
 }
 
 // Close stops the handler's background rate-limiter worker.

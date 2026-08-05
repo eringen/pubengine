@@ -27,7 +27,7 @@ SELECT browser AS name, COUNT(*) AS count
 FROM visits
 WHERE timestamp >= ? AND timestamp < ?
 GROUP BY browser
-ORDER BY count DESC
+ORDER BY count DESC, name ASC
 `
 
 type BrowserStatsRow struct {
@@ -205,7 +205,7 @@ SELECT device AS name, COUNT(*) AS count
 FROM visits
 WHERE timestamp >= ? AND timestamp < ?
 GROUP BY device
-ORDER BY count DESC
+ORDER BY count DESC, name ASC
 `
 
 type DeviceStatsRow struct {
@@ -505,7 +505,7 @@ SELECT os AS name, COUNT(*) AS count
 FROM visits
 WHERE timestamp >= ? AND timestamp < ?
 GROUP BY os
-ORDER BY count DESC
+ORDER BY count DESC, name ASC
 `
 
 type OSStatsRow struct {
@@ -537,12 +537,15 @@ func (q *Queries) OSStats(ctx context.Context, timestamp time.Time, timestamp_2 
 }
 
 const referrerStats = `-- name: ReferrerStats :many
-SELECT CAST(COALESCE(NULLIF(referrer, ''), 'Direct') AS TEXT) AS name,
-    COUNT(*) AS count
-FROM visits
-WHERE timestamp >= ? AND timestamp < ?
-GROUP BY 1
-ORDER BY count DESC
+WITH counts AS (
+ SELECT CAST(COALESCE(NULLIF(referrer, ''), 'Direct') AS TEXT) AS name, COUNT(*) AS count
+ FROM visits WHERE timestamp >= ? AND timestamp < ? GROUP BY 1
+), ranked AS (
+ SELECT name,count,ROW_NUMBER() OVER (ORDER BY count DESC,name ASC) AS position_idx FROM counts
+)
+SELECT CAST(CASE WHEN position_idx <= 10 THEN name ELSE 'Other referrers' END AS TEXT) AS name,
+ CAST(SUM(count) AS INTEGER) AS count
+FROM ranked GROUP BY 1 ORDER BY count DESC,name ASC
 `
 
 type ReferrerStatsRow struct {
@@ -578,7 +581,7 @@ SELECT path, COUNT(*) AS views
 FROM bot_visits
 WHERE timestamp >= ? AND timestamp < ?
 GROUP BY path
-ORDER BY views DESC
+ORDER BY views DESC, path ASC
 LIMIT 10
 `
 
@@ -652,7 +655,7 @@ SELECT path, COUNT(*) AS views
 FROM visits
 WHERE timestamp >= ? AND timestamp < ?
 GROUP BY path
-ORDER BY views DESC
+ORDER BY views DESC, path ASC
 LIMIT 10
 `
 
@@ -715,4 +718,23 @@ ON CONFLICT(key) DO UPDATE SET value = excluded.value
 func (q *Queries) UpsertSetting(ctx context.Context, key string, value string) error {
 	_, err := q.db.ExecContext(ctx, upsertSetting, key, value)
 	return err
+}
+
+const visitTotals = `-- name: VisitTotals :one
+SELECT COUNT(*) AS views, COUNT(DISTINCT visitor_id) AS visitors,
+ CAST(COALESCE(AVG(CASE WHEN duration_sec > 0 THEN duration_sec END), 0) AS REAL) AS duration
+FROM visits WHERE timestamp >= ? AND timestamp < ?
+`
+
+type VisitTotalsRow struct {
+	Views    int64
+	Visitors int64
+	Duration float64
+}
+
+func (q *Queries) VisitTotals(ctx context.Context, timestamp time.Time, timestamp_2 time.Time) (VisitTotalsRow, error) {
+	row := q.db.QueryRowContext(ctx, visitTotals, timestamp, timestamp_2)
+	var i VisitTotalsRow
+	err := row.Scan(&i.Views, &i.Visitors, &i.Duration)
+	return i, err
 }
