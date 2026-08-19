@@ -69,21 +69,8 @@ func (a *App) handlePost(c echo.Context) error {
 	return Render(c, a.Views.Post(post, posts, a.Config.URL))
 }
 
-func (a *App) handleSitemap(c echo.Context) error {
-	posts, _, err := a.Cache.ListPageContext(c.Request().Context(), "", 0, 0)
-	if err != nil {
-		return err
-	}
-	return a.renderSitemap(c, posts)
-}
-
-func (a *App) handleFeed(c echo.Context) error {
-	posts, _, err := a.Cache.ListPageContext(c.Request().Context(), "", 0, 0)
-	if err != nil {
-		return err
-	}
-	return a.renderRSS(c, posts)
-}
+func (a *App) handleSitemap(c echo.Context) error { return a.serveXML(c, "sitemap") }
+func (a *App) handleFeed(c echo.Context) error    { return a.serveXML(c, "feed") }
 
 func handleBlogRedirect(c echo.Context) error {
 	return c.Redirect(http.StatusMovedPermanently, "/")

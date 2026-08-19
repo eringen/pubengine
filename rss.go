@@ -2,7 +2,7 @@ package pubengine
 
 import (
 	"encoding/xml"
-	"net/http"
+	"github.com/eringen/pubengine/internal/httpcache"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -29,7 +29,7 @@ type rssItem struct {
 	GUID        string `xml:"guid"`
 }
 
-func (a *App) renderRSS(c echo.Context, posts []BlogPost) error {
+func (a *App) buildRSS(posts []BlogPost) ([]byte, error) {
 	base := a.Config.URL
 	items := make([]rssItem, 0, len(posts))
 	for _, p := range posts {
@@ -55,8 +55,20 @@ func (a *App) renderRSS(c echo.Context, posts []BlogPost) error {
 			Items:       items,
 		},
 	}
-	c.Response().Header().Set(echo.HeaderContentType, "application/rss+xml; charset=utf-8")
-	c.Response().WriteHeader(http.StatusOK)
-	c.Response().Write([]byte(xml.Header))
-	return xml.NewEncoder(c.Response()).Encode(feed)
+	var buf renderBuffer
+	if _, err := buf.WriteString(xml.Header); err != nil {
+		return nil, err
+	}
+	if err := xml.NewEncoder(&buf).Encode(feed); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (a *App) renderRSS(c echo.Context, posts []BlogPost) error {
+	body, err := a.buildRSS(posts)
+	if err != nil {
+		return err
+	}
+	return httpcache.Bytes(c, 200, "application/rss+xml; charset=utf-8", body)
 }

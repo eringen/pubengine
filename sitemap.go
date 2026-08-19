@@ -2,7 +2,7 @@ package pubengine
 
 import (
 	"encoding/xml"
-	"net/http"
+	"github.com/eringen/pubengine/internal/httpcache"
 
 	"github.com/labstack/echo/v4"
 )
@@ -18,7 +18,7 @@ type sitemapURL struct {
 	LastMod string `xml:"lastmod,omitempty"`
 }
 
-func (a *App) renderSitemap(c echo.Context, posts []BlogPost) error {
+func (a *App) buildSitemap(posts []BlogPost) ([]byte, error) {
 	base := a.Config.URL
 	urls := []sitemapURL{
 		{Loc: BuildURL(base)},
@@ -33,8 +33,20 @@ func (a *App) renderSitemap(c echo.Context, posts []BlogPost) error {
 		XMLNS: "http://www.sitemaps.org/schemas/sitemap/0.9",
 		URLs:  urls,
 	}
-	c.Response().Header().Set(echo.HeaderContentType, "application/xml; charset=utf-8")
-	c.Response().WriteHeader(http.StatusOK)
-	c.Response().Write([]byte(xml.Header))
-	return xml.NewEncoder(c.Response()).Encode(sitemap)
+	var buf renderBuffer
+	if _, err := buf.WriteString(xml.Header); err != nil {
+		return nil, err
+	}
+	if err := xml.NewEncoder(&buf).Encode(sitemap); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (a *App) renderSitemap(c echo.Context, posts []BlogPost) error {
+	body, err := a.buildSitemap(posts)
+	if err != nil {
+		return err
+	}
+	return httpcache.Bytes(c, 200, "application/xml; charset=utf-8", body)
 }

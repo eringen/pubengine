@@ -28,15 +28,25 @@ var (
 // Markdown returns a templ.Component that renders md as HTML.
 func Markdown(content string) templ.Component {
 	return templ.ComponentFunc(func(ctx context.Context, w io.Writer) error {
-		var buf bytes.Buffer
-		RenderMarkdown(&buf, content)
-		_, err := w.Write(buf.Bytes())
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		rendered, err := cachedMarkdown(content)
+		if err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		_, err = w.Write(rendered)
 		return err
 	})
 }
 
 // RenderMarkdown writes the HTML representation of md to buf.
-func RenderMarkdown(buf *bytes.Buffer, md string) {
+func RenderMarkdown(buf *bytes.Buffer, md string) { renderMarkdown(buf, md) }
+
+func renderMarkdown(buf interface{ WriteString(string) (int, error) }, md string) {
 	imageCount := 0
 	lines := strings.Split(md, "\n")
 	inList := false

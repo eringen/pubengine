@@ -9,11 +9,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
+	"github.com/eringen/pubengine/internal/httpcache"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -54,6 +56,8 @@ type App struct {
 	analyticsStore   *analytics.Store
 	customRoutes     []func(*App)
 	staticDir        string
+	xmlMu            sync.Mutex
+	xmlDocuments     map[string]xmlDocument
 	imageMu          sync.Mutex
 	lifecycleMu      sync.Mutex
 	started          bool
@@ -161,12 +165,17 @@ func (a *App) setupRoutes() {
 
 	// Serve embedded framework assets (talkdom.js, analytics.js, dashboard.min.js)
 	// These are served under /public/ and fall through to the user's static dir.
-	embeddedFS, _ := fs.Sub(EmbeddedAssets, "embedded")
-	embeddedHandler := http.FileServer(http.FS(embeddedFS))
-	e.GET("/public/talkdom.js", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
-	e.GET("/public/analytics.js", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
-	e.GET("/public/dashboard.min.js", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
-	e.GET("/public/admin.css", echo.WrapHandler(http.StripPrefix("/public/", embeddedHandler)))
+	for _, name := range []string{"talkdom.js", "analytics.js", "dashboard.min.js", "admin.css"} {
+		body, err := EmbeddedAssets.ReadFile("embedded/" + name)
+		if err != nil {
+			panic(err)
+		}
+		tag := httpcache.ETag(body)
+		kind := mime.TypeByExtension(filepath.Ext(name))
+		handler := func(c echo.Context) error { return httpcache.TaggedBytes(c, 200, kind, body, tag) }
+		e.GET("/public/"+name, handler)
+		e.HEAD("/public/"+name, handler)
+	}
 
 	// User's static assets
 	e.Static("/public", a.staticDir)
@@ -179,6 +188,10 @@ func (a *App) setupRoutes() {
 	e.GET("/blog/", handleBlogRedirect)
 	e.GET("/", a.handleHome)
 	e.GET("/blog/:slug/", a.handlePost)
+	e.HEAD("/", a.handleHome)
+	e.HEAD("/blog/:slug/", a.handlePost)
+	e.HEAD("/feed.xml", a.handleFeed)
+	e.HEAD("/sitemap.xml", a.handleSitemap)
 
 	// Admin routes
 	e.GET("/admin/", a.handleAdmin)

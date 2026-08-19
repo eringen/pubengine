@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/gorilla/sessions"
@@ -45,7 +46,11 @@ func (a *App) setupMiddleware() {
 	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
 		Level: 5,
 		Skipper: func(c echo.Context) bool {
-			return strings.HasPrefix(c.Request().URL.Path, "/public/")
+			switch strings.ToLower(filepath.Ext(c.Request().URL.Path)) {
+			case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".ico", ".woff", ".woff2", ".mp4", ".zip", ".gz":
+				return true
+			}
+			return false
 		},
 	}))
 
@@ -72,7 +77,7 @@ func (a *App) setupMiddleware() {
 		CookieSecure: a.Config.CookieSecure,
 		Skipper: func(c echo.Context) bool {
 			path := c.Request().URL.Path
-			return strings.HasPrefix(path, "/api/analytics/") ||
+			return strings.HasPrefix(path, "/public/") || strings.HasPrefix(path, "/api/analytics/") ||
 				path == "/admin/auth/google/callback"
 		},
 		ErrorHandler: func(err error, c echo.Context) error {

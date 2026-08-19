@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/a-h/templ"
+	"github.com/eringen/pubengine/internal/httpcache"
 	"github.com/labstack/echo/v4"
 )
 
@@ -23,7 +24,7 @@ func RenderStatus(c echo.Context, code int, cmp templ.Component) error {
 	if err := cmp.Render(c.Request().Context(), &buf); err != nil {
 		return err
 	}
-	return c.Blob(code, echo.MIMETextHTMLCharsetUTF8, buf.Bytes())
+	return httpcache.Bytes(c, code, echo.MIMETextHTMLCharsetUTF8, buf.Bytes())
 }
 
 const MaxSize = 16 << 20
