@@ -2,6 +2,7 @@ package pubengine
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -34,25 +35,62 @@ const (
 // processImage decodes an image from src, optionally resizes it to maxImageWidth,
 // and encodes it as JPEG. Returns metadata and the encoded bytes.
 func processImage(src io.Reader, originalName string) (Image, []byte, error) {
-	raw, err := io.ReadAll(io.LimitReader(src, maxUploadSize+1))
-	if err != nil {
+	return processImageContext(context.Background(), src, originalName)
+}
+func processImageContext(ctx context.Context, src io.Reader, originalName string) (Image, []byte, error) {
+	if err := ctx.Err(); err != nil {
 		return Image{}, nil, err
 	}
-	if len(raw) > maxUploadSize {
-		return Image{}, nil, fmt.Errorf("%w: file exceeds 10 MB", ErrInvalidImage)
+	var reader io.ReadSeeker
+	var start int64
+	if seeker, ok := src.(io.ReadSeeker); ok {
+		var err error
+		start, err = seeker.Seek(0, io.SeekCurrent)
+		if err != nil {
+			return Image{}, nil, err
+		}
+		end, err := seeker.Seek(0, io.SeekEnd)
+		if err != nil {
+			return Image{}, nil, err
+		}
+		if end-start > maxUploadSize {
+			return Image{}, nil, fmt.Errorf("%w: file exceeds 10 MB", ErrInvalidImage)
+		}
+		if _, err := seeker.Seek(start, io.SeekStart); err != nil {
+			return Image{}, nil, err
+		}
+		reader = seeker
+	} else {
+		raw, err := io.ReadAll(io.LimitReader(src, maxUploadSize+1))
+		if err != nil {
+			return Image{}, nil, err
+		}
+		if len(raw) > maxUploadSize {
+			return Image{}, nil, fmt.Errorf("%w: file exceeds 10 MB", ErrInvalidImage)
+		}
+		reader = bytes.NewReader(raw)
 	}
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	cfg, _, err := image.DecodeConfig(reader)
 	if err != nil {
 		return Image{}, nil, fmt.Errorf("%w: %v", ErrInvalidImage, err)
 	}
 	if cfg.Width < 1 || cfg.Height < 1 || cfg.Width > maxImageDimension || cfg.Height > maxImageDimension || int64(cfg.Width)*int64(cfg.Height) > maxImagePixels {
 		return Image{}, nil, fmt.Errorf("%w: image dimensions are too large", ErrInvalidImage)
 	}
-	img, _, err := image.Decode(bytes.NewReader(raw))
+	if err := ctx.Err(); err != nil {
+		return Image{}, nil, err
+	}
+	if _, err := reader.Seek(start, io.SeekStart); err != nil {
+		return Image{}, nil, err
+	}
+	img, _, err := image.Decode(reader)
 	if err != nil {
 		return Image{}, nil, fmt.Errorf("%w: %v", ErrInvalidImage, err)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return Image{}, nil, err
+	}
 	bounds := img.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
 
@@ -66,6 +104,9 @@ func processImage(src io.Reader, originalName string) (Image, []byte, error) {
 		h = newH
 	}
 
+	if err := ctx.Err(); err != nil {
+		return Image{}, nil, err
+	}
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: jpegQuality}); err != nil {
 		return Image{}, nil, fmt.Errorf("encode jpeg: %w", err)
@@ -102,6 +143,12 @@ var ErrInvalidImage = errors.New("invalid image")
 
 // storeImage exclusively creates a new file and removes it if metadata persistence fails.
 func (a *App) storeImage(img Image, data []byte) error {
+	return a.storeImageContext(context.Background(), img, data)
+}
+func (a *App) storeImageContext(ctx context.Context, img Image, data []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	dir := filepath.Join(a.staticDir, uploadsSubdir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -121,7 +168,7 @@ func (a *App) storeImage(img Image, data []byte) error {
 	if err := errors.Join(writeErr, closeErr); err != nil {
 		return errors.Join(err, os.Remove(path))
 	}
-	if err := a.Store.SaveImage(img); err != nil {
+	if err := a.Store.SaveImageContext(ctx, img); err != nil {
 		return errors.Join(err, os.Remove(path))
 	}
 	return nil
@@ -146,7 +193,7 @@ func (a *App) handleImageUpload(c echo.Context) error {
 	}
 	defer src.Close()
 
-	img, data, err := processImage(src, file.Filename)
+	img, data, err := processImageContext(c.Request().Context(), src, file.Filename)
 	if err != nil {
 		if errors.Is(err, ErrInvalidImage) {
 			return c.String(http.StatusBadRequest, err.Error())
@@ -154,7 +201,7 @@ func (a *App) handleImageUpload(c echo.Context) error {
 		return err
 	}
 
-	if err := a.storeImage(img, data); err != nil {
+	if err := a.storeImageContext(c.Request().Context(), img, data); err != nil {
 		return err
 	}
 
@@ -166,7 +213,7 @@ func (a *App) handleImageDelete(c echo.Context) error {
 		return c.Redirect(http.StatusSeeOther, "/admin/")
 	}
 
-	if err := a.deleteImage(c.Param("filename")); err != nil {
+	if err := a.deleteImageContext(c.Request().Context(), c.Param("filename")); err != nil {
 		return err
 	}
 
@@ -198,6 +245,9 @@ func (a *App) renderImageList(c echo.Context) error {
 }
 
 func (a *App) deleteImage(filename string) error {
+	return a.deleteImageContext(context.Background(), filename)
+}
+func (a *App) deleteImageContext(ctx context.Context, filename string) error {
 	if filename == "" || filepath.Base(filename) != filename || strings.ContainsAny(filename, "/\\%") || !strings.HasSuffix(filename, ".jpg") {
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid image filename")
 	}
@@ -205,7 +255,7 @@ func (a *App) deleteImage(filename string) error {
 	a.imageMu.Lock()
 	defer a.imageMu.Unlock()
 	var exists int
-	if err := a.Store.db.QueryRow("SELECT 1 FROM images WHERE filename=?", filename).Scan(&exists); err != nil {
+	if err := a.Store.db.QueryRowContext(ctx, "SELECT 1 FROM images WHERE filename=?", filename).Scan(&exists); err != nil {
 		if err == sql.ErrNoRows {
 			return echo.ErrNotFound
 		}
@@ -226,7 +276,7 @@ func (a *App) deleteImage(filename string) error {
 		}
 		moved = false
 	}
-	if err := a.Store.DeleteImage(filename); err != nil {
+	if err := a.Store.DeleteImageContext(ctx, filename); err != nil {
 		if moved {
 			return errors.Join(err, os.Rename(backup, path))
 		}

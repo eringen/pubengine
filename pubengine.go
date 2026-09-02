@@ -58,6 +58,7 @@ type App struct {
 	staticDir        string
 	xmlMu            sync.Mutex
 	xmlDocuments     map[string]xmlDocument
+	uploadSlots      chan struct{}
 	imageMu          sync.Mutex
 	lifecycleMu      sync.Mutex
 	started          bool
@@ -73,10 +74,11 @@ func New(cfg SiteConfig, views ViewFuncs, opts ...Option) *App {
 	cfg.setDefaults()
 
 	a := &App{
-		Config:    cfg,
-		Echo:      echo.New(),
-		Views:     views,
-		staticDir: "public",
+		Config:      cfg,
+		Echo:        echo.New(),
+		Views:       views,
+		staticDir:   "public",
+		uploadSlots: make(chan struct{}, max(1, min(8, cfg.MaxConcurrentUploads))),
 	}
 
 	for _, opt := range opts {

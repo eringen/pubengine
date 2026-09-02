@@ -35,8 +35,9 @@ type SiteConfig struct {
 	IdleTimeout       time.Duration // Default 60 seconds
 	ShutdownTimeout   time.Duration // Default 10 seconds
 
-	PageSize     int           // Zero preserves full-content list views; positive enables paginated summaries.
-	PostCacheTTL time.Duration // Post cache TTL (default 5min)
+	MaxConcurrentUploads int           // Default 2; bounds upload parsing and decoding.
+	PageSize             int           // Zero preserves full-content list views; positive enables paginated summaries.
+	PostCacheTTL         time.Duration // Post cache TTL (default 5min)
 }
 
 // GoogleAuthEnabled returns true when all three Google OAuth fields are configured.
@@ -45,6 +46,9 @@ func (c *SiteConfig) GoogleAuthEnabled() bool {
 }
 
 func (c *SiteConfig) setDefaults() {
+	if c.MaxConcurrentUploads == 0 {
+		c.MaxConcurrentUploads = 2
+	}
 	if c.ReadHeaderTimeout == 0 {
 		c.ReadHeaderTimeout = 5 * time.Second
 	}
@@ -110,6 +114,9 @@ func (c SiteConfig) validate() error {
 	}
 	if len(c.SessionSecret) < 32 || strings.Contains(strings.ToLower(c.SessionSecret), "changeme") {
 		return fmt.Errorf("pubengine: SessionSecret must be a random signing key of at least 32 bytes")
+	}
+	if c.MaxConcurrentUploads < 0 || c.MaxConcurrentUploads > 8 {
+		return fmt.Errorf("pubengine: MaxConcurrentUploads must be between 0 and 8")
 	}
 	if c.PageSize < 0 || c.PageSize > 200 {
 		return fmt.Errorf("pubengine: PageSize must be between 0 and 200")

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -28,7 +29,7 @@ func (a *App) setupMiddleware() {
 
 	e.HTTPErrorHandler = a.httpErrorHandler
 
-	e.Pre(cacheControlMiddleware, requestBodyLimits, middleware.NonWWWRedirect())
+	e.Pre(cacheControlMiddleware, a.requestBodyLimits, middleware.NonWWWRedirect())
 
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogStatus:  true,
@@ -168,7 +169,7 @@ func CsrfToken(c echo.Context) string {
 }
 
 // Read bounded framework bodies before CSRF can parse forms or multipart data.
-func requestBodyLimits(next echo.HandlerFunc) echo.HandlerFunc {
+func (a *App) requestBodyLimits(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		req := c.Request()
 		if req.Body == nil || req.Body == http.NoBody {
@@ -190,6 +191,43 @@ func requestBodyLimits(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		if req.ContentLength > limit {
 			return echo.ErrStatusRequestEntityTooLarge
+		}
+		if path == "/admin/images/upload" {
+			select {
+			case a.uploadSlots <- struct{}{}:
+				defer func() { <-a.uploadSlots }()
+			default:
+				c.Response().Header().Set("Retry-After", "1")
+				return c.String(http.StatusServiceUnavailable, "Upload capacity reached. Retry shortly.")
+			}
+			if err := req.Context().Err(); err != nil {
+				return err
+			}
+			file, err := os.CreateTemp("", "pubengine-upload-*")
+			if err != nil {
+				return err
+			}
+			defer os.Remove(file.Name())
+			defer file.Close()
+			n, err := io.Copy(file, io.LimitReader(req.Body, limit+1))
+			req.Body.Close()
+			if err != nil {
+				return echo.NewHTTPError(400, "Invalid request body").SetInternal(err)
+			}
+			if n > limit {
+				return echo.ErrStatusRequestEntityTooLarge
+			}
+			if _, err := file.Seek(0, io.SeekStart); err != nil {
+				return err
+			}
+			req.Body = file
+			if strings.HasPrefix(req.Header.Get("Content-Type"), "multipart/form-data") {
+				if err := req.ParseMultipartForm(1 << 20); err != nil {
+					return echo.NewHTTPError(400, "Invalid upload").SetInternal(err)
+				}
+				defer req.MultipartForm.RemoveAll()
+			}
+			return next(c)
 		}
 		body, err := io.ReadAll(io.LimitReader(req.Body, limit+1))
 		req.Body.Close()
