@@ -74,7 +74,8 @@ type BotVisit struct {
 	Timestamp  time.Time `json:"timestamp"`
 }
 
-// VisitRequest is the data sent from client.
+// VisitRequest is the legacy client payload.
+// Deprecated: use CollectRequest with a page-view ID.
 type VisitRequest struct {
 	Path       string `json:"path"`
 	Referrer   string `json:"referrer"`

@@ -4,6 +4,9 @@
   var script = document.currentScript;
   var endpoint = (script && script.src ? new URL(script.src).origin : "") + "/api/analytics/collect";
   var active = null;
+  function excluded(path) { return path === "/admin" || path.indexOf("/admin/") === 0; }
+  if (excluded(window.location.pathname)) return;
+  function duration() { return active.elapsed + (active.since === null ? 0 : Date.now() - active.since); }
 
   function newID() {
     if (window.crypto && window.crypto.getRandomValues) {
@@ -30,14 +33,16 @@
       referrer: active.referrer,
       screen_size: screen.width + "x" + screen.height,
       user_agent: navigator.userAgent,
-      duration_sec: event === "view" ? 0 : Math.min(86400, Math.max(0, Math.round((Date.now() - active.started) / 1000)))
+      duration_sec: event === "view" ? 0 : Math.min(86400, Math.max(0, Math.round(duration() / 1000)))
     });
     if (typeof navigator.sendBeacon === "function" && navigator.sendBeacon(endpoint, new Blob([body], { type: "application/json" }))) return;
     fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: body, keepalive: true }).catch(function () {});
   }
 
-  function start() {
-    active = { id: newID(), path: window.location.pathname, referrer: referrer(), started: Date.now(), ended: false };
+  function start(path) {
+    path = typeof path === "string" ? path : window.location.pathname;
+    if (excluded(path)) { active = null; return; }
+    active = { id: newID(), path: path, referrer: referrer(), elapsed: 0, since: document.hidden ? null : Date.now(), ended: false };
     send("view");
   }
 
@@ -50,12 +55,19 @@
   function navigate(event) {
     if (!event.detail || event.detail.receiver !== "content") return;
     // The URL is already updated, but the outgoing view retains its original path.
-    if (active && active.path === window.location.pathname) return;
+    var path = event.detail.url ? new URL(event.detail.url, window.location.href).pathname : window.location.pathname;
+    if (active && active.path === path) return;
     finish();
-    start();
+    start(path);
   }
 
   document.addEventListener("talkdom:done", navigate);
+  document.addEventListener("visibilitychange", function () {
+    if (!active || active.ended) return;
+    if (document.hidden) {
+      active.elapsed = duration(); active.since = null; send("duration");
+    } else if (active.since === null) { active.since = Date.now(); }
+  });
   window.addEventListener("pagehide", finish);
   window.addEventListener("beforeunload", finish);
   window.addEventListener("pageshow", function (event) { if (event.persisted) start(); });

@@ -203,3 +203,22 @@ func TestAnalyticsMigrationNormalizesLegacyRows(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCollectorExcludesAdminTraffic(t *testing.T) {
+	s := testStore(t)
+	h := NewHandler(s)
+	defer h.Close()
+	e := echo.New()
+	for _, path := range []string{"/admin/", "/admin/post/new/", "/%61dmin/", "/public/../admin/"} {
+		body, _ := json.Marshal(CollectRequest{Event: "view", PageViewID: "aaaaaaaaaaaaaaaa", Path: path, UserAgent: "Chrome"})
+		r := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/analytics/collect", strings.NewReader(string(body)))
+		if err := h.Collect(e.NewContext(req, r)); err != nil || r.Code != 204 {
+			t.Fatal(err, r.Code)
+		}
+	}
+	var count int
+	if err := s.db.QueryRow("SELECT count(*) FROM visits").Scan(&count); err != nil || count != 0 {
+		t.Fatal(count, err)
+	}
+}

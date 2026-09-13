@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -124,6 +125,12 @@ func (h *Handler) Collect(c echo.Context) error {
 	// Validate input
 	if err := validateCollectRequest(&req); err != nil {
 		return c.String(http.StatusBadRequest, "Invalid request")
+	}
+
+	parsedPath, _ := url.Parse(req.Path)
+	normalizedPath := path.Clean(parsedPath.Path)
+	if normalizedPath == "/admin" || strings.HasPrefix(normalizedPath, "/admin/") {
+		return c.NoContent(http.StatusNoContent)
 	}
 
 	// Get User-Agent from request if not provided

@@ -211,7 +211,8 @@ func (s *Store) SaveVisitContext(ctx context.Context, v *Visit) error {
 	})
 }
 
-// UpdateVisitDuration updates the duration of the most recent visit for a visitor+path.
+// UpdateVisitDuration updates the latest visit for a path.
+// Deprecated: use SaveVisitContext with a page-view ID.
 func (s *Store) UpdateVisitDuration(visitorID, path string, durationSec int) error {
 	return s.q.UpdateVisitDuration(context.Background(), sqlcgen.UpdateVisitDurationParams{
 		DurationSec: sql.NullInt64{Int64: int64(durationSec), Valid: true},
