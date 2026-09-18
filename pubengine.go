@@ -76,7 +76,7 @@ func New(cfg SiteConfig, views ViewFuncs, opts ...Option) *App {
 	a := &App{
 		Config:      cfg,
 		Echo:        echo.New(),
-		Views:       views,
+		Views:       defaultViews(views),
 		staticDir:   "public",
 		uploadSlots: make(chan struct{}, max(1, min(8, cfg.MaxConcurrentUploads))),
 	}
