@@ -79,7 +79,9 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 				<div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
 					<a href="/admin/" class="text-lg font-bold">{ siteConfig(ctx).Name } Admin</a>
 					<div class="flex items-center gap-4">
-						<a href="/admin/analytics/" class="text-sm text-gray-600 hover:text-gray-900">Analytics</a>
+						if siteConfig(ctx).AnalyticsEnabled {
+							<a href="/admin/analytics/" class="text-sm text-gray-600 hover:text-gray-900">Analytics</a>
+						}
 						<a href="/" class="text-sm text-gray-600 hover:text-gray-900">View Site</a>
 						<form method="POST" action="/admin/logout/">
 							<input type="hidden" name="_csrf" value={ csrfToken }/>
@@ -248,17 +250,13 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 			</button>
 			<button
 				type="button"
-				onclick="document.getElementById('post-form').innerHTML = ''"
+				onclick="const panel=document.getElementById('post-form');if(panel)panel.innerHTML='';else location.href='/admin/'"
 				class="px-4 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50"
 			>
 				Cancel
 			</button>
 		</div>
 	</form>
-}
-
-script copyMarkdown(text string) {
-	navigator.clipboard.writeText(text)
 }
 
 // formatBytes formats a byte count as a human-readable string.
@@ -281,7 +279,7 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 			<h2 class="text-lg font-bold">Image Library</h2>
 			<button
 				type="button"
-				onclick="document.getElementById('post-form').innerHTML = ''"
+				onclick="const panel=document.getElementById('post-form');if(panel)panel.innerHTML='';else location.href='/admin/'"
 				class="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50"
 			>
 				Close
@@ -331,7 +329,8 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 							<div class="flex items-center gap-1">
 								<button
 									type="button"
-									onclick={ copyMarkdown(fmt.Sprintf("![%s](/public/uploads/%s){|%d|%d}", img.Filename, img.Filename, img.Width, img.Height)) }
+									data-markdown={ fmt.Sprintf("![%s](/public/uploads/%s){|%d|%d}", img.Filename, img.Filename, img.Width, img.Height) }
+									onclick="navigator.clipboard.writeText(this.dataset.markdown)"
 									class="text-xs text-blue-600 hover:underline"
 								>
 									Copy Markdown

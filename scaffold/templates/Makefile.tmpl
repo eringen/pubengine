@@ -26,8 +26,15 @@ js: $(JS_OUTPUT)
 $(JS_OUTPUT): $(JS_INPUT) | $(ESBUILD)
 	$(ESBUILD) $(JS_INPUT) --bundle --minify --outfile=$(JS_OUTPUT)
 
-$(TAILWINDCSS) $(ESBUILD):
-	npm install
+package-lock.json: package.json
+	npm install --package-lock-only --no-audit --no-fund
+
+node_modules/.tools-ready: package-lock.json
+	npm ci --no-audit --no-fund
+	touch $@
+
+$(TAILWINDCSS) $(ESBUILD): node_modules/.tools-ready
+	test -x $@
 
 templ:
 	$(TEMPL) generate

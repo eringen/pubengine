@@ -12,7 +12,9 @@ templ Head(siteName string) {
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
 		<link rel="stylesheet" href="/public/tailwind.css"/>
 		<script src="/public/talkdom.js" defer></script>
-		<script src="/public/analytics.js?v=2" defer></script>
+		if siteConfig(ctx).AnalyticsEnabled {
+			<script src="/public/analytics.js?v=2" defer></script>
+		}
 		<script src="/public/app.min.js" defer></script>
 	</head>
 }
@@ -40,7 +42,9 @@ templ HeadWithMeta(meta pubengine.PageMeta, siteName string) {
 		<link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
 		<link rel="stylesheet" href="/public/tailwind.css"/>
 		<script src="/public/talkdom.js" defer></script>
-		<script src="/public/analytics.js?v=2" defer></script>
+		if siteConfig(ctx).AnalyticsEnabled {
+			<script src="/public/analytics.js?v=2" defer></script>
+		}
 		<script src="/public/app.min.js" defer></script>
 	</head>
 }

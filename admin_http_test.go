@@ -1,13 +1,18 @@
 package pubengine
 
 import (
-	"github.com/a-h/templ"
-	"github.com/labstack/echo/v4"
+	"bytes"
+	"image"
+	"image/png"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/a-h/templ"
+	"github.com/labstack/echo/v4"
 )
 
 func TestAdminFormResponseContract(t *testing.T) {
@@ -47,5 +52,35 @@ func TestAdminFormResponseContract(t *testing.T) {
 	good := send("slug=post&title=Post&published=1")
 	if good.Code != http.StatusSeeOther || good.Header().Get("Location") != "/admin/?msg=saved" {
 		t.Fatal(good.Code, good.Body)
+	}
+	a.Views.AdminImages = func([]Image, string) templ.Component { return templ.Raw("uploaded") }
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for _, cookie := range login.Result().Cookies() {
+		if cookie.Name == "_csrf" {
+			if err := writer.WriteField("_csrf", cookie.Value); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	file, err := writer.CreateFormFile("image", "photo.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(file, image.NewRGBA(image.Rect(0, 0, 12, 8))); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "/admin/images/upload/", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	for _, cookie := range login.Result().Cookies() {
+		req.AddCookie(cookie)
+	}
+	uploaded := httptest.NewRecorder()
+	a.Echo.ServeHTTP(uploaded, req)
+	if uploaded.Code != 200 || uploaded.Body.String() != "uploaded" {
+		t.Fatal(uploaded.Code, uploaded.Body)
 	}
 }

@@ -90,7 +90,7 @@ func (a *App) handleAdminSave(c echo.Context) error {
 		p.Slug = Slugify(p.Title)
 	}
 	if p.Date == "" {
-		p.Date = time.Now().Format("2006-01-02")
+		p.Date = time.Now().UTC().Format("2006-01-02")
 	}
 	if revision := c.FormValue("revision"); revision != "" {
 		var err error

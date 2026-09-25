@@ -16,10 +16,7 @@ import (
 
 // Exercise actual generated code, including templates that ordinary go test never compiles.
 func TestGeneratedSite(t *testing.T) {
-	generator, err := exec.LookPath("templ")
-	if err != nil {
-		t.Skip("templ generator is not installed")
-	}
+	generator := "github.com/a-h/templ/cmd/templ@v0.3.960"
 	dir := t.TempDir()
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -60,14 +57,26 @@ func TestGeneratedSite(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "views", "render_test.go"), []byte(generatedViewTest), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	for _, args := range [][]string{{generator, "generate", "-path", dir}, {"go", "mod", "tidy"}, {"go", "test", "./..."}} {
+	for _, args := range [][]string{{"go", "run", generator, "generate", "-path", dir}, {"go", "mod", "tidy"}, {"go", "test", "./..."}} {
 		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "GOWORK=off", "GOPROXY=off")
+		cmd.Env = append(os.Environ(), "GOWORK=off")
 		if output, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("%v: %v\n%s", args, err, output)
+		}
+	}
+	if os.Getenv("PUBENGINE_BROWSER_TESTS") == "1" {
+		for _, args := range [][]string{{"npm", "install", "--no-audit", "--no-fund"}, {"make", "css", "js"}, {"go", "build", "-o", "site", "."}, {"node", filepath.Join(root, "scripts", "browser_test.cjs"), dir}} {
+			cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(), "GOWORK=off")
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("%v: %v\n%s", args, err, output)
+			} else {
+				t.Logf("%s", output)
+			}
 		}
 	}
 }

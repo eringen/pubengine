@@ -16,3 +16,5 @@ Thumbs.db
 # Build
 tmp/
 build-errors.log
+
+node_modules/

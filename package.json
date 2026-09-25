@@ -1,0 +1,10 @@
+{
+  "name": "pubengine-checks",
+  "private": true,
+  "scripts": {
+    "test": "node scripts/talkdom_test.cjs && node scripts/analytics_test.cjs",
+    "test:browser": "PUBENGINE_BROWSER_TESTS=1 go test ./cmd/pubengine -run '^TestGeneratedSite$' -count=1 -v"
+  },
+  "devDependencies": { "playwright": "1.59.1" },
+  "engines": { "node": ">=22" }
+}
