@@ -94,6 +94,71 @@ func TestInvalidationDoesNotWaitForDatabase(t *testing.T) {
 	}
 }
 
+func TestBodyCacheEvictsIncrementally(t *testing.T) {
+	c := &PostCache{bodies: make(map[string]BlogPost)}
+	for i := 0; i <= maxCachedBodies; i++ {
+		c.rememberBody(BlogPost{Slug: fmt.Sprint(i), Content: "body"})
+	}
+	if len(c.bodies) != maxCachedBodies || c.bodies["1"].Content != "body" {
+		t.Fatal("cache discarded retained articles")
+	}
+	if _, ok := c.bodies["0"]; ok {
+		t.Fatal("oldest article was not evicted")
+	}
+	large := BlogPost{Slug: "large", Content: strings.Repeat("x", maxBodyBytes), Tags: []string{"go"}}
+	c.rememberBody(large)
+	large.Tags[0] = "changed"
+	if len(c.bodies) != 1 || c.bodyBytes != maxBodyBytes || c.bodies["large"].Tags[0] != "go" {
+		t.Fatal("body budget or ownership was not preserved")
+	}
+	c.rememberBody(BlogPost{Slug: "oversized", Content: large.Content + "x"})
+	if len(c.bodies) != 1 || c.bodies["large"].Content == "" {
+		t.Fatal("oversized article displaced cached content")
+	}
+	c.Invalidate()
+	if c.bodyBytes != 0 || len(c.bodyOrder) != 0 {
+		t.Fatal("invalidation retained body accounting")
+	}
+}
+
+func TestFullContentListBeyondCacheLimit(t *testing.T) {
+	s, err := NewStore(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for i := 0; i < maxCachedBodies+2; i++ {
+		slug := fmt.Sprintf("post-%03d", i)
+		if err := s.SavePost(BlogPost{Slug: slug, Title: slug, Content: slug, Tags: []string{"go"}, Published: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := NewPostCache(s, time.Hour)
+	for _, tag := range []string{"", "GO", "missing"} {
+		posts, err := c.ListPosts(tag)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := maxCachedBodies + 2
+		if tag == "missing" {
+			want = 0
+		}
+		if len(posts) != want {
+			t.Fatal(len(posts))
+		}
+		for i, p := range posts {
+			if p.Content != fmt.Sprintf("post-%03d", i) || p.Tags[0] != "go" {
+				t.Fatal(p)
+			}
+			p.Tags[0] = "changed"
+		}
+	}
+	p, err := c.GetPost("post-000")
+	if err != nil || p.Tags[0] != "go" {
+		t.Fatal(p, err)
+	}
+}
+
 func BenchmarkPostCache(b *testing.B) {
 	for _, count := range []int{100, 1000, 10000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {

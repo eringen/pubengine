@@ -12,6 +12,9 @@ import (
 
 var ErrNotFound = sql.ErrNoRows
 
+const maxCachedBodies = 128
+const maxBodyBytes = 16 << 20
+
 type postSnapshot struct {
 	posts   []BlogPost
 	tags    []string
@@ -25,6 +28,8 @@ type PostCache struct {
 	mu         sync.RWMutex
 	snapshot   *postSnapshot
 	bodies     map[string]BlogPost
+	bodyOrder  []string
+	bodyBytes  int
 	generation uint64
 	loading    chan struct{}
 	lastErr    error
@@ -41,6 +46,8 @@ func (c *PostCache) Invalidate() {
 	c.generation++
 	c.snapshot = nil
 	c.bodies = nil
+	c.bodyOrder = nil
+	c.bodyBytes = 0
 	c.lastErr = nil
 	c.retryAt = time.Time{}
 }
@@ -96,6 +103,8 @@ func (c *PostCache) snapshotContext(ctx context.Context) (*postSnapshot, error) 
 			if err == nil {
 				c.snapshot = snapshot
 				c.bodies = map[string]BlogPost{}
+				c.bodyOrder = nil
+				c.bodyBytes = 0
 				c.lastErr = nil
 			} else if ctx.Err() == nil {
 				c.lastErr = err
@@ -116,17 +125,68 @@ func (c *PostCache) ListPosts(tag string) ([]BlogPost, error) {
 	return c.ListPostsContext(context.Background(), tag)
 }
 func (c *PostCache) ListPostsContext(ctx context.Context, tag string) ([]BlogPost, error) {
-	posts, _, err := c.ListPageContext(ctx, tag, 0, 0)
-	if err != nil {
-		return nil, err
-	}
-	for i, p := range posts {
-		posts[i], err = c.GetPostContext(ctx, p.Slug)
+	for {
+		snapshot, err := c.snapshotContext(ctx)
 		if err != nil {
 			return nil, err
 		}
+		indices := snapshot.byTag[normalizeTag(tag)]
+		count := len(indices)
+		if tag == "" {
+			count = len(snapshot.posts)
+		}
+		posts := make([]BlogPost, count)
+		complete := true
+		c.mu.RLock()
+		for i := range posts {
+			index := i
+			if tag != "" {
+				index = indices[i]
+			}
+			summary := snapshot.posts[index]
+			p, ok := c.bodies[summary.Slug]
+			if ok {
+				posts[i] = clonePost(p)
+			} else {
+				posts[i] = summary
+				complete = false
+			}
+		}
+		current := snapshot == c.snapshot
+		c.mu.RUnlock()
+		if !current {
+			continue
+		}
+		if complete {
+			return posts, nil
+		}
+		loaded, err := c.store.ListPostsContext(ctx, tag)
+		if err != nil {
+			return nil, err
+		}
+		bySlug := make(map[string]BlogPost, len(loaded))
+		for _, p := range loaded {
+			bySlug[p.Slug] = p
+		}
+		c.mu.Lock()
+		if snapshot != c.snapshot {
+			c.mu.Unlock()
+			continue
+		}
+		for i, p := range posts {
+			full, ok := bySlug[p.Slug]
+			if !ok {
+				c.mu.Unlock()
+				return nil, ErrNotFound
+			}
+			posts[i] = full
+			if i < maxCachedBodies {
+				c.rememberBody(full)
+			}
+		}
+		c.mu.Unlock()
+		return posts, nil
 	}
-	return posts, nil
 }
 
 // ListPageContext returns summaries and whether another page exists; zero limit means all.
@@ -203,13 +263,27 @@ func (c *PostCache) GetPostContext(ctx context.Context, slug string) (BlogPost, 
 			c.mu.Unlock()
 			continue
 		}
-		if len(c.bodies) >= 128 {
-			c.bodies = map[string]BlogPost{}
-		}
-		c.bodies[slug] = p
+		c.rememberBody(p)
 		c.mu.Unlock()
 		return clonePost(p), nil
 	}
+}
+
+// rememberBody requires the cache lock.
+func (c *PostCache) rememberBody(p BlogPost) {
+	if _, ok := c.bodies[p.Slug]; ok || len(p.Content) > maxBodyBytes {
+		return
+	}
+	for len(c.bodies) >= maxCachedBodies || c.bodyBytes+len(p.Content) > maxBodyBytes {
+		slug := c.bodyOrder[0]
+		c.bodyOrder[0] = ""
+		c.bodyOrder = c.bodyOrder[1:]
+		c.bodyBytes -= len(c.bodies[slug].Content)
+		delete(c.bodies, slug)
+	}
+	c.bodies[p.Slug] = clonePost(p)
+	c.bodyOrder = append(c.bodyOrder, p.Slug)
+	c.bodyBytes += len(p.Content)
 }
 
 func (c *PostCache) RelatedContext(ctx context.Context, p BlogPost, limit int) ([]BlogPost, error) {

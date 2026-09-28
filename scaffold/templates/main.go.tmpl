@@ -23,22 +23,22 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	cfg := pubengine.SiteConfig{
-			Name:               pubengine.EnvOr("SITE_NAME", "{{.SiteName}}"),
-			URL:                pubengine.EnvOr("SITE_URL", "http://localhost:3000"),
-			Description:        pubengine.EnvOr("SITE_DESCRIPTION", "A blog powered by pubengine"),
-			Author:             pubengine.EnvOr("SITE_AUTHOR", ""),
-			Addr:               pubengine.EnvOr("ADDR", ":3000"),
-			DatabasePath:       pubengine.EnvOr("DATABASE_PATH", "data/blog.db"),
-			AdminPassword:      pubengine.MustEnv("ADMIN_PASSWORD"),
-			SessionSecret:      pubengine.MustEnv("ADMIN_SESSION_SECRET"),
-			CookieSecure:       pubengine.EnvOr("COOKIE_SECURE", "") == "true",
-			GoogleClientID:     pubengine.EnvOr("GOOGLE_CLIENT_ID", ""),
-			GoogleClientSecret: pubengine.EnvOr("GOOGLE_CLIENT_SECRET", ""),
-			GoogleAdminEmail:   pubengine.EnvOr("GOOGLE_ADMIN_EMAIL", ""),
-			PageSize: 20,
-			AnalyticsEnabled:   pubengine.EnvOr("ANALYTICS_ENABLED", "true") == "true",
-			AnalyticsDatabasePath: pubengine.EnvOr("ANALYTICS_DATABASE_PATH", "data/analytics.db"),
-		}
+		Name:                  pubengine.EnvOr("SITE_NAME", "{{.SiteName}}"),
+		URL:                   pubengine.EnvOr("SITE_URL", "http://localhost:3000"),
+		Description:           pubengine.EnvOr("SITE_DESCRIPTION", "A blog powered by pubengine"),
+		Author:                pubengine.EnvOr("SITE_AUTHOR", ""),
+		Addr:                  pubengine.EnvOr("ADDR", ":3000"),
+		DatabasePath:          pubengine.EnvOr("DATABASE_PATH", "data/blog.db"),
+		AdminPassword:         pubengine.MustEnv("ADMIN_PASSWORD"),
+		SessionSecret:         pubengine.MustEnv("ADMIN_SESSION_SECRET"),
+		CookieSecure:          pubengine.EnvOr("COOKIE_SECURE", "") == "true",
+		GoogleClientID:        pubengine.EnvOr("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret:    pubengine.EnvOr("GOOGLE_CLIENT_SECRET", ""),
+		GoogleAdminEmail:      pubengine.EnvOr("GOOGLE_ADMIN_EMAIL", ""),
+		PageSize:              20,
+		AnalyticsEnabled:      pubengine.EnvOr("ANALYTICS_ENABLED", "true") == "true",
+		AnalyticsDatabasePath: pubengine.EnvOr("ANALYTICS_DATABASE_PATH", "data/analytics.db"),
+	}
 	app := pubengine.New(cfg, views.New(cfg))
 
 	defer app.Close()
