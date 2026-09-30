@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/eringen/pubengine/analytics/sqlcgen"
 )
 
 func TestReportBoundsOwnershipAndCancellation(t *testing.T) {
@@ -52,6 +55,54 @@ func TestReportBoundsOwnershipAndCancellation(t *testing.T) {
 	}
 	if err := s.SaveVisit(&Visit{VisitorID: "after", Timestamp: now}); err != nil {
 		t.Fatal("read transaction leaked", err)
+	}
+}
+
+func TestReportSnapshotAllowsWrites(t *testing.T) {
+	s, err := NewStore(filepath.Join(t.TempDir(), "analytics.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	now := time.Now().UTC()
+	from, to := now.Add(-time.Hour), now.Add(time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err = s.readSnapshot(ctx, func(q *sqlcgen.Queries) error {
+		before, err := q.CountVisits(ctx, from, to)
+		if err != nil {
+			return err
+		}
+		if err := s.SaveVisitContext(ctx, &Visit{VisitorID: "during-read", Timestamp: now}); err != nil {
+			return fmt.Errorf("snapshot blocked collection: %w", err)
+		}
+		after, err := q.CountVisits(ctx, from, to)
+		if err == nil && before != after {
+			return fmt.Errorf("inconsistent snapshot: %d then %d", before, after)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := s.q.CountVisits(ctx, from, to)
+	if err != nil || count != 1 {
+		t.Fatal(count, err)
+	}
+	canceled, stop := context.WithCancel(ctx)
+	err = s.readSnapshot(canceled, func(q *sqlcgen.Queries) error {
+		stop()
+		_, err := q.CountVisits(canceled, from, to)
+		return err
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if err := s.readSnapshot(ctx, func(q *sqlcgen.Queries) error {
+		_, err := q.CountVisits(ctx, from, to)
+		return err
+	}); err != nil {
+		t.Fatal("canceled report leaked its transaction", err)
 	}
 }
 
