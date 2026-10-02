@@ -3,8 +3,17 @@
   "private": true,
   "scripts": {
     "test": "node scripts/talkdom_test.cjs && node scripts/analytics_test.cjs",
-    "test:browser": "PUBENGINE_BROWSER_TESTS=1 go test ./cmd/pubengine -run '^TestGeneratedSite$' -count=1 -v"
+    "test:browser": "PUBENGINE_BROWSER_TESTS=1 go test ./cmd/pubengine -run '^TestGeneratedSite$' -count=1 -v",
+    "build:talkdom": "node scripts/build_talkdom.cjs",
+    "check:talkdom": "node scripts/build_talkdom.cjs --check"
   },
-  "devDependencies": { "playwright": "1.59.1" },
-  "engines": { "node": ">=22" }
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "jsdom": "30.1.1",
+    "playwright": "1.63.0",
+    "talkdom": "0.5.0"
+  },
+  "engines": {
+    "node": ">=24.15.0"
+  }
 }

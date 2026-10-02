@@ -62,6 +62,7 @@
   }
 
   document.addEventListener("talkdom:done", navigate);
+  document.addEventListener("talkdom:navigate", navigate);
   document.addEventListener("visibilitychange", function () {
     if (!active || active.ended) return;
     if (document.hidden) {
