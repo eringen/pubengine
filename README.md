@@ -53,6 +53,7 @@ myblog/
 │   ├── nav.templ         # Head, Nav, Footer
 │   ├── notfound.templ    # 404 page
 │   ├── servererror.templ # 500 page
+│   ├── config.go         # Runtime settings bound to views
 │   └── helpers.go        # Type aliases for BlogPost, PageMeta
 ├── assets/
 │   └── tailwind.css      # Tailwind directives
@@ -84,6 +85,10 @@ Your blog is running at `http://localhost:3000`. Admin dashboard at `/admin/`.
 
 The correctness fixes change a few integration points:
 
+- Bind scaffold views with `views.New(cfg)` so runtime name, description, author, and analytics settings reach every page. Generated sites read `ANALYTICS_DATABASE_PATH` and `ANALYTICS_ENABLED` (default `true`).
+- Set `PageSize: 20` to enable summary listings, pagination, and at most six related posts. Read page links with `PaginationFromContext(ctx)`. Zero preserves the existing full-content callback contract. `BlogPost.Link` retains its legacy format; use `PostPath(post.Slug)` for canonical links.
+- Full-page editor errors use the optional `AdminEditor` callback; without it, the framework wraps `AdminFormPartial` in a basic document. Saves redirect with HTTP 303 and post deletion returns 204. Fetch-based image controls must check response status and authentication redirects before replacing their panel.
+- Scaffold `HomePartial` and `PostPartial` now return complete documents. Updated talkDOM extracts the content and synchronizes title, canonical/OpenGraph metadata, and JSON-LD. Update custom navigation views to follow this contract when their metadata changes.
 - Set a unique admin password and a random `SessionSecret` of at least 32 bytes. Known scaffold placeholders are rejected. Session cookies are **signed**, not encrypted. Rotating the signing key logs out existing sessions.
 - New scaffolds create a private, ignored `.env` with unique credentials and a shareable `.env.example` with blank credential fields. Keep `.env` private; do not replace it with the blank example.
 - `SavePost` now creates when `Revision == 0`. To edit, fetch the post with `GetPostAny`, modify it, and save its `OriginalSlug` and `Revision` unchanged. Fetch again after a successful save. Duplicate slugs and stale revisions return `ErrPostConflict`. Renames retain redirects to published destinations; previous slugs stay reserved until the post is deleted.
@@ -112,31 +117,21 @@ import (
 )
 
 func main() {
-    app := pubengine.New(
-        pubengine.SiteConfig{
-            Name:          pubengine.EnvOr("SITE_NAME", "My Blog"),
-            URL:           pubengine.EnvOr("SITE_URL", "http://localhost:3000"),
-            Description:   pubengine.EnvOr("SITE_DESCRIPTION", "A blog about things"),
-            Author:        pubengine.EnvOr("SITE_AUTHOR", "Your Name"),
-            Addr:          pubengine.EnvOr("ADDR", ":3000"),
-            DatabasePath:  pubengine.EnvOr("DATABASE_PATH", "data/blog.db"),
-            AdminPassword: pubengine.MustEnv("ADMIN_PASSWORD"),
-            SessionSecret: pubengine.MustEnv("ADMIN_SESSION_SECRET"),
-            CookieSecure:  pubengine.EnvOr("COOKIE_SECURE", "") == "true",
-        },
-        pubengine.ViewFuncs{
-            Home:             views.Home,
-            HomePartial:      views.HomePartial,
-            BlogSection:      views.BlogSection,
-            Post:             views.Post,
-            PostPartial:      views.PostPartial,
-            AdminLogin:       views.AdminLogin,
-            AdminDashboard:   views.AdminDashboard,
-            AdminFormPartial: views.AdminFormPartial,
-            NotFound:         views.NotFound,
-            ServerError:      views.ServerError,
-        },
-    )
+    cfg := pubengine.SiteConfig{
+        Name:          pubengine.EnvOr("SITE_NAME", "My Blog"),
+        URL:           pubengine.EnvOr("SITE_URL", "http://localhost:3000"),
+        Description:   pubengine.EnvOr("SITE_DESCRIPTION", "A blog about things"),
+        Author:        pubengine.EnvOr("SITE_AUTHOR", "Your Name"),
+        Addr:          pubengine.EnvOr("ADDR", ":3000"),
+        DatabasePath:  pubengine.EnvOr("DATABASE_PATH", "data/blog.db"),
+        AdminPassword: pubengine.MustEnv("ADMIN_PASSWORD"),
+        SessionSecret: pubengine.MustEnv("ADMIN_SESSION_SECRET"),
+        CookieSecure:  pubengine.EnvOr("COOKIE_SECURE", "") == "true",
+        PageSize:      20,
+        AnalyticsEnabled: pubengine.EnvOr("ANALYTICS_ENABLED", "true") == "true",
+        AnalyticsDatabasePath: pubengine.EnvOr("ANALYTICS_DATABASE_PATH", "data/analytics.db"),
+    }
+    app := pubengine.New(cfg, views.New(cfg))
     defer app.Close()
 
     if err := app.Start(); err != nil {
@@ -164,6 +159,7 @@ type ViewFuncs struct {
     AdminLogin       func(errorMsg string, csrfToken string, googleLoginURL string) templ.Component
     AdminDashboard   func(posts []BlogPost, message string, csrfToken string) templ.Component
     AdminFormPartial func(post BlogPost, csrfToken string) templ.Component
+    AdminEditor      func(post BlogPost, csrfToken string) templ.Component
     AdminImages      func(images []Image, csrfToken string) templ.Component
 
     // Error pages
@@ -173,6 +169,8 @@ type ViewFuncs struct {
 ```
 
 The framework selects partial renders using the `partial` query parameter in the scaffold’s talkDOM requests.
+
+`HomePartial` and `PostPartial` default to their full-page callbacks. Missing error views have basic built-in pages. Other missing callbacks return a render error and HTTP 500 instead of panicking. `AdminEditor` is optional as described above. Scaffold `views.New(cfg)` binds runtime settings without changing callback signatures.
 
 ### SiteConfig
 
@@ -195,6 +193,8 @@ All configuration in one struct:
 | `GoogleClientSecret` | `string` | `""` | Google OAuth client secret (optional) |
 | `GoogleAdminEmail` | `string` | `""` | Allowed Google email for admin login (optional) |
 | `PostCacheTTL` | `time.Duration` | `5m` | In memory post cache TTL |
+| `PageSize` | `int` | `0` | 1–200 enables paginated summaries; scaffold uses 20 |
+| `MaxConcurrentUploads` | `int` | `2` | 1–8 simultaneous uploads; excess requests receive 503 and Retry-After |
 | `ReadHeaderTimeout` | `time.Duration` | `5s` | Limit for reading HTTP headers |
 | `ReadTimeout` | `time.Duration` | `30s` | Limit for reading an HTTP request |
 | `WriteTimeout` | `time.Duration` | `30s` | Limit for writing an HTTP response |
@@ -310,7 +310,9 @@ pubengine exports utility functions for use in your templates:
 ```go
 // URL and path helpers
 pubengine.BuildURL(base, "blog", slug)     // "https://example.com/blog/my-post/"
+pubengine.PostPath(slug)                   // "/blog/my-post/"
 pubengine.PathEscape(tag)                   // URL safe tag encoding
+pubengine.QueryEscape(tag)                  // Query parameter encoding
 pubengine.Slugify("My Post Title")          // "my-post-title"
 
 // Tag helpers
@@ -351,6 +353,7 @@ pubengine includes a custom markdown renderer (`pubengine/markdown` package) wit
 | `### Heading 3` | `<h3>` |
 | `[text](url)` | Link (same tab) |
 | `[text](url)^` | Link (new tab, adds `target="_blank"`) |
+| `![alt](url)` | Image without assumed dimensions |
 | `![alt](url){style}` | Image with inline CSS |
 | `![alt](url){style\|w\|h}` | Image with dimensions |
 | `- item` | Unordered list |
@@ -382,7 +385,9 @@ markdown.RenderMarkdown(&buf, "**hello** world")
 
 ### Security
 
-All text is HTML escaped before formatting. Only `http`, `https`, `mailto`, and `tel` URL schemes are allowed. Bold/italic regex runs only on text outside HTML tags to prevent URL corruption. First image gets `fetchpriority="high"` for LCP optimization. Inline code content is protected from bold/italic formatting.
+All text is HTML escaped before formatting. Only `http`, `https`, `mailto`, and `tel` URL schemes are allowed. Bold/italic regex runs only on text outside HTML tags to prevent URL corruption. The first image gets `fetchpriority="high"`; later images use lazy loading. The image library copies actual dimensions. Inline code content is protected from bold/italic formatting.
+
+Rendering accepts up to 2 MiB of Markdown and 16 MiB of output. A process-wide cache retains up to 256 rendered articles within a 16 MiB budget; outputs over 1 MiB bypass it. Content changes use a new cache key immediately.
 
 ## Analytics
 
@@ -410,22 +415,24 @@ The framework ships `analytics.js` as an embedded asset, automatically served at
 <script src="/public/analytics.js?v=2" defer></script>
 ```
 
-The script tracks page views and duration with explicit event types and page-view IDs, and handles talkDOM navigation. It uses `navigator.sendBeacon` for unload tracking, with a fetch fallback. Delivery is best effort. Bot counts cover collector submissions, not every crawler request to the site.
+The script tracks page views and visible-tab duration with explicit event types and page-view IDs, and handles committed talkDOM navigation. Hidden time is excluded. It uses `navigator.sendBeacon` for unload tracking, with a fetch fallback. Delivery is best effort. Admin paths are excluded by both client and collector. Installation is same-origin; cross-origin collection is not configured. The older `VisitRequest` and path-based `UpdateVisitDuration` APIs are deprecated.
 
 ### Dashboard
 
 The analytics dashboard is available at `/admin/analytics/` (requires admin login). The admin nav bar includes a link to it. It shows:
 
-- Realtime visitors (last 5 minutes)
+- Viewed in last 5 min (distinct visitors who started a page view; not an active-reader heartbeat)
 - Unique visitors and total page views
-- Average time on page
+- Average visible-tab time on page
 - Top pages and latest visits (last 10)
 - Browser, OS, and device breakdown
-- Referrer sources
+- Top ten referrer sources plus Other, retaining the total
 - Daily/hourly/monthly view charts
-- Bot traffic (separate tab with independent period selection)
+- Beacon bots (collector submissions, not every crawler page request)
 
 The dashboard is fully self contained. Its CSS (`admin.css`) and JS (`dashboard.min.js`) are embedded in the binary alongside `talkdom.js`.
+
+Reports use one read snapshot, honor request cancellation, and coalesce identical periods into a five-second cache with at most 16 period keys per report type. Recent-view counts refresh separately and query errors remain errors. Polling pauses while the tab is hidden. Collection remains synchronous; a successful response acknowledges persistence.
 
 ### Rate limiting
 
@@ -469,9 +476,13 @@ pubengine configures a production ready middleware stack:
 3. **Recover** provides panic recovery with error logging
 4. **Security headers** include CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy
 5. **Session** uses cookie based sessions (gorilla/sessions, 12 hour expiry)
-6. **CSRF** provides token based protection (skipped for analytics endpoint)
+6. **CSRF** provides token based protection (skipped for analytics and static assets)
 7. **Trailing slash** enforces consistent URL format
 8. **Cache-Control** sets stable assets and public pages to revalidate, admin/API/error responses to no-store
+
+Text assets are gzip compressed; compressed media is skipped. Public rendered HTML, RSS, sitemap, and embedded assets have ETags and support conditional responses. HTML still renders before its validator is calculated; feed and sitemap representations are reused until the post snapshot or site metadata changes. Stable `?v=2` URLs are not treated as content hashes or cached as immutable.
+
+Uploads are admitted before body parsing, spooled to bounded temporary files, and limited to JPEG, PNG, or GIF input. Admission has no waiting queue. The concurrency setting bounds simultaneous processing, not total process memory; decoding large images still requires substantial memory.
 
 ## Database
 
@@ -487,7 +498,8 @@ CREATE TABLE posts (
     tags TEXT NOT NULL,          -- comma delimited: ",go,web,"
     summary TEXT NOT NULL,
     content TEXT NOT NULL,
-    published INTEGER NOT NULL DEFAULT 1
+    published INTEGER NOT NULL DEFAULT 1,
+    revision INTEGER NOT NULL DEFAULT 1
 );
 ```
 
@@ -498,6 +510,7 @@ Separate SQLite at `data/analytics.db`.
 ```sql
 CREATE TABLE visits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    page_view_id TEXT,
     visitor_id TEXT NOT NULL,
     session_id TEXT NOT NULL,
     ip_hash TEXT NOT NULL,
@@ -513,6 +526,7 @@ CREATE TABLE visits (
 
 CREATE TABLE bot_visits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    page_view_id TEXT,
     bot_name TEXT NOT NULL,
     ip_hash TEXT NOT NULL,
     user_agent TEXT NOT NULL,
@@ -527,6 +541,8 @@ CREATE TABLE settings (
 ```
 
 Both databases use WAL mode with tuned pragmas (busy_timeout, synchronous=NORMAL, 8MB cache, 256MB mmap) for concurrent read performance.
+
+These table outlines omit auxiliary tables and indexes. Runtime migrations also maintain post redirects and unique page-view indexes. Legacy referrers migrate in bounded primary-key batches within one transaction; retention cleanup deletes 1,000 rows per batch and supports cancellation.
 
 ## Store API
 
@@ -551,6 +567,8 @@ store.SavePost(post)                      // create, or update the fetched revis
 store.DeletePost("my-slug")              // delete by slug
 ```
 
+Request handlers should use the corresponding `...Context(ctx, ...)` methods. Empty dates default to the current UTC date at the store boundary. Tags are trimmed, deduplicated, and normalized with Go Unicode lowercasing; posts sort by descending date and ascending slug. Direct store mutations require `cache.Invalidate()` when using a separate cache.
+
 ## Cache API
 
 The `PostCache` wraps the store with an in memory cache:
@@ -558,12 +576,17 @@ The `PostCache` wraps the store with an in memory cache:
 ```go
 cache := pubengine.NewPostCache(store, 5*time.Minute)
 
-posts, _ := cache.ListPosts("")     // from cache if fresh, else DB
+posts, _ := cache.ListPosts("")     // full content; bulk DB read when bodies are missing
 tags, _  := cache.ListTags()        // from cache
-post, _  := cache.GetPost("slug")   // from cached post list
+post, _  := cache.GetPost("slug")   // indexed lookup; body fetched on demand
+
+posts, more, err := cache.ListPageContext(ctx, "go", 0, 20)
+related, err := cache.RelatedContext(ctx, post, 6)
 
 cache.Invalidate()                  // clear on write operations
 ```
+
+The cache keeps an immutable archive summary and slug/tag indexes. Body retention is limited to 128 entries and 16 MiB of content, with oldest entries evicted individually. Summary memory still grows with archive size. Refresh I/O runs outside the cache lock; invalidation prevents an older in-flight refresh from publishing. Returned slices belong to the caller.
 
 ## Project structure
 
@@ -663,7 +686,7 @@ npm run build        # Build both CSS and JS
 |---|---|---|---|
 | `ADMIN_PASSWORD` | yes | | Admin login password |
 | `ADMIN_SESSION_SECRET` | yes | | Random cookie signing key (at least 32 bytes) |
-| `SITE_NAME` | no | `Blog` | Site name for nav, RSS, JSON-LD |
+| `SITE_NAME` | no | Generated project name | Site name for nav, RSS, JSON-LD |
 | `SITE_URL` | no | `http://localhost:3000` | Canonical URL for sitemap and OpenGraph |
 | `SITE_DESCRIPTION` | no | `""` | Description for RSS and meta tags |
 | `SITE_AUTHOR` | no | `""` | Author name for JSON-LD |
@@ -673,6 +696,7 @@ npm run build        # Build both CSS and JS
 | `GOOGLE_ADMIN_EMAIL` | no | `""` | Allowed Google email for admin login |
 | `DATABASE_PATH` | no | `data/blog.db` | Blog SQLite path |
 | `ANALYTICS_DATABASE_PATH` | no | `data/analytics.db` | Analytics SQLite path |
+| `ANALYTICS_ENABLED` | no | `true` | Generated site enables tracking only when set to `true` |
 | `ADDR` | no | `:3000` | Server listen address |
 
 ## Dependencies
@@ -689,18 +713,33 @@ No JavaScript framework dependencies. talkDOM and the analytics script are embed
 
 ## Testing
 
+Use Go 1.25 and Node.js 22 or newer for repository checks. Generators are pinned to templ v0.3.960 and sqlc v1.30.0. Generated sites pin Tailwind CSS and esbuild; retain their generated `package-lock.json` for reproducible installs.
+
 ```bash
-# Run all tests
-go test ./...
-
-# Run with verbose output
-go test -v ./...
-
-# Run benchmarks
-go test -bench=. ./...
+npm ci
+npx playwright install chromium
+make check-generated
+make test
+npm run test:browser
+make bench
 ```
 
-Test coverage includes store operations, rate limiting, and markdown rendering.
+`make test` runs Go race tests, vet, and Node regressions. Generated Go/templates are always compiled by `go test ./...`; the pinned generator may download dependencies on the first run. Browser checks additionally build the generated CSS/JS and exercise pagination, metadata, Back navigation, failed and out-of-order requests, edit conflicts, uploads, copied Markdown, and expired sessions. CI installs Chromium and runs these checks.
+
+### Performance samples
+
+Local samples on Apple M4, darwin/arm64, Go 1.25.4, without an HTTP proxy:
+
+| Fixture | Measured operation | Sample |
+|---|---|---|
+| 100 / 1,000 / 10,000 posts, in-memory SQLite, warm cache | Single-post lookup | 62–64 ns, 32 B, 1 allocation |
+| Same fixtures | 20 summaries | 0.84–1.01 µs, 4,096 B, 21 allocations |
+| Same fixtures | Six related summaries | 0.64–0.72 µs, 2,880 B, 11 allocations |
+| 10,000 visits/referrers, file-backed SQLite, uncached year report | Complete report | 39.3 ms, 19,357 B, 417 allocations |
+| 1,000 / 10,000 distinct legacy referrers, file-backed SQLite | Migration transaction | 3.37 / 32.1 ms, 0.52 / 5.19 MB allocated |
+| 2,400 × 1,600 PNG resized to 800 pixels wide | Decode and resize | 44.3 ms, 58.4 MB allocated |
+
+Reproduce with `go test ./... -run '^$' -bench . -benchmem -benchtime=100ms`; filter with `-bench BenchmarkPostCache`, `BenchmarkAnalyticsReport`, `BenchmarkLegacyMigration`, or `BenchmarkImageProcessing`. These are local microbenchmarks, not before/after speedups, HTTP throughput, p95 latency, or peak heap measurements. Benchmark production-sized data and concurrent collection before adding write queues or more analytics indexes.
 
 ## Deployment
 
