@@ -83,6 +83,11 @@ Your blog is running at `http://localhost:3000`. Admin dashboard at `/admin/`.
 
 ## Upgrading existing sites
 
+New projects pin the published PubEngine v0.4.0 module. This checkout includes further unreleased improvements; consuming sites need a local `replace` during development, or a subsequent release to receive those embedded assets and server changes.
+
+The updated build libraries require Go 1.26 and Node.js 24.15+. Scaffolds use Tailwind CSS/CLI 4.3.3, typography 0.5.20, and esbuild 0.28.2. Tailwind 4 targets Safari 16.4+, Chrome 111+, and Firefox 128+. Existing sites migrating from Tailwind 3 should copy the updated CSS imports, CLI dependency, source directives, and config together; updating only the version will not build the styles.
+
+
 The correctness fixes change a few integration points:
 
 - Bind scaffold views with `views.New(cfg)` so runtime name, description, author, and analytics settings reach every page. Generated sites read `ANALYTICS_DATABASE_PATH` and `ANALYTICS_ENABLED` (default `true`).
@@ -703,17 +708,19 @@ npm run build        # Build both CSS and JS
 
 | Package | Version | Purpose |
 |---|---|---|
-| [echo/v4](https://echo.labstack.com/) | v4.14.0 | HTTP framework |
-| [templ](https://templ.guide/) | v0.3.960 | Type safe HTML templates |
-| [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) | v1.44.2 | Pure Go SQLite driver |
-| [gorilla/sessions](https://github.com/gorilla/sessions) | v1.2.2 | Cookie session management |
-| [echo-contrib](https://github.com/labstack/echo-contrib) | v0.17.1 | Echo session middleware |
+| [echo/v4](https://echo.labstack.com/) | v4.16.0 | HTTP framework |
+| [templ](https://templ.guide/) | v0.3.1020 | Type safe HTML templates |
+| [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) | v1.60.1 | Pure Go SQLite driver |
+| [gorilla/sessions](https://github.com/gorilla/sessions) | v1.4.0 | Cookie session management |
+| [echo-contrib](https://github.com/labstack/echo-contrib) | v0.50.1 | Echo session middleware |
 
-No JavaScript framework dependencies. talkDOM and the analytics script are embedded in the binary.
+No JavaScript framework dependencies. TalkDOM 0.5.0 and the analytics script are embedded in the binary. `npm run build:talkdom` reproducibly builds the pinned npm source with the integration in `scripts/build_talkdom.cjs`; `npm run check:talkdom` verifies the artifact. The generic cancellation and native-click fixes are also committed upstream as `c351966` and remain in the build integration until a published TalkDOM release includes them. PubEngine adds document metadata snapshots, authentication redirects, and a `talkdom:navigate` event emitted after URL commits and history restoration. Analytics listens for that event as well as legacy `talkdom:done` events.
+
+The scaffold includes article typography, responsive admin forms, keyboard skip links and focus handling, and navigation loading/error announcements. Its JavaScript retains compatibility with v0.4.0's navigation events.
 
 ## Testing
 
-Use Go 1.25 and Node.js 22 or newer for repository checks. Generators are pinned to templ v0.3.960 and sqlc v1.30.0. Generated sites pin Tailwind CSS and esbuild; retain their generated `package-lock.json` for reproducible installs.
+Use Go 1.26 and Node.js 24.15 or newer for repository checks. Generators are pinned to templ v0.3.1020 and sqlc v1.30.0. Generated sites pin Tailwind CSS and esbuild; retain their generated `package-lock.json` for reproducible installs.
 
 ```bash
 npm ci
@@ -721,10 +728,17 @@ npx playwright install chromium
 make check-generated
 make test
 npm run test:browser
+PUBENGINE_TEST_PUBLISHED=1 npm run test:browser  # Verify the pinned v0.4.0 dependency too
 make bench
 ```
 
 `make test` runs Go race tests, vet, and Node regressions. Generated Go/templates are always compiled by `go test ./...`; the pinned generator may download dependencies on the first run. Browser checks additionally build the generated CSS/JS and exercise pagination, metadata, Back navigation, failed and out-of-order requests, edit conflicts, uploads, copied Markdown, and expired sessions. CI installs Chromium and runs these checks.
+
+### Rendering allocation improvement
+
+On Apple M4, darwin/arm64, Go 1.26.0, `go test ./internal/htmlrender -run '^$' -bench BenchmarkRender -benchmem -count=3` renders the same approximately 31 KiB article into a reused HTTP recorder. Before this change, public responses allocated about 33,008 B in 7 allocations and took 12.3–17.0 µs; afterward they allocated 176 B in 5 allocations and took 10.7–10.8 µs. Admin responses went from about 32,976 B / 5 allocations / 12.3–12.6 µs to 0 B / 0 allocations / 0.71–0.75 µs by also skipping unused ETag hashes. These isolate rendering costs, not complete request latency.
+
+Render buffers with capacity up to 64 KiB are reused after the response finishes; larger buffers are discarded. This is a per-buffer retention cap, not a global memory limit. Render errors remain atomic and the 16 MiB output limit still applies.
 
 ### Performance samples
 
