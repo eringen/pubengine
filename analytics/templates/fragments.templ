@@ -174,7 +174,7 @@ templ LatestPagesSection(pages []LatestPageVisitViewModel) {
 			<h2>Latest Visited Pages</h2>
 			<table class="data-table">
 				<tbody>
-					
+
 					for _, page := range pages {
 						@LatestPageRow(page)
 					}
@@ -351,7 +351,7 @@ func maxViews(data []DailyViewViewModel) int {
 
 func maxPageViews(pages []PageStatViewModel) int {
 	max := 0
-	
+
 	for _, page := range pages {
 		if page.Views > max {
 			max = page.Views
