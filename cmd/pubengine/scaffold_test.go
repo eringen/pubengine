@@ -50,12 +50,11 @@ func TestGeneratedSite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mod := "module example.com/audit\n\ngo 1.26.0\n\nrequire github.com/eringen/pubengine v0.0.0\nreplace github.com/eringen/pubengine => " + root + "\n"
-	if os.Getenv("PUBENGINE_TEST_PUBLISHED") == "1" {
-		mod = "module example.com/audit\n\ngo 1.26.0\n\nrequire (\n github.com/eringen/pubengine v0.4.0\n github.com/a-h/templ v0.3.1020\n)\n"
-	}
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(mod), 0o644); err != nil {
-		t.Fatal(err)
+	if os.Getenv("PUBENGINE_TEST_PUBLISHED") != "1" {
+		mod := "module example.com/audit\n\ngo 1.26.0\n\nrequire github.com/eringen/pubengine v0.0.0\nreplace github.com/eringen/pubengine => " + root + "\n"
+		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(mod), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := os.WriteFile(filepath.Join(dir, "views", "render_test.go"), []byte(generatedViewTest), 0o644); err != nil {
 		t.Fatal(err)

@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased
+## v0.5.0 — 2026-10-02
 
 - Update Go libraries and generators; require Go 1.26 and Node.js 24.15 for development.
-- Pin new sites to PubEngine v0.4.0; migrate their build to Tailwind 4.3.3 and esbuild 0.28.2.
+- Pin new sites to PubEngine v0.5.0; migrate their build to Tailwind 4.3.3 and esbuild 0.28.2.
 - Bundle TalkDOM 0.5.0 reproducibly, retaining metadata, authentication, history, and analytics integration.
 - Cancel superseded reads and preserve modified clicks; upstream TalkDOM fixes are committed as c351966.
 - Add article typography, responsive forms, keyboard navigation, and loading/error feedback.

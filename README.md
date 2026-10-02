@@ -83,11 +83,16 @@ Your blog is running at `http://localhost:3000`. Admin dashboard at `/admin/`.
 
 ## Upgrading existing sites
 
-New projects pin the published PubEngine v0.4.0 module. This checkout includes further unreleased improvements; consuming sites need a local `replace` during development, or a subsequent release to receive those embedded assets and server changes.
+New projects pin PubEngine v0.5.0. To update an existing blog's runtime and embedded assets, run these commands inside its project:
+
+```bash
+go get github.com/eringen/pubengine@v0.5.0
+go mod tidy
+```
+
+Update the site's templ generator to v0.3.1020, then rebuild and deploy its binary. Template, CSS, and custom JavaScript files belong to your blog and are not overwritten by a module update. To adopt the new typography, responsive layout, and navigation feedback, merge the updated scaffold files into your site and rebuild its assets.
 
 The updated build libraries require Go 1.26 and Node.js 24.15+. Scaffolds use Tailwind CSS/CLI 4.3.3, typography 0.5.20, and esbuild 0.28.2. Tailwind 4 targets Safari 16.4+, Chrome 111+, and Firefox 128+. Existing sites migrating from Tailwind 3 should copy the updated CSS imports, CLI dependency, source directives, and config together; updating only the version will not build the styles.
-
-
 The correctness fixes change a few integration points:
 
 - Bind scaffold views with `views.New(cfg)` so runtime name, description, author, and analytics settings reach every page. Generated sites read `ANALYTICS_DATABASE_PATH` and `ANALYTICS_ENABLED` (default `true`).
@@ -728,7 +733,7 @@ npx playwright install chromium
 make check-generated
 make test
 npm run test:browser
-PUBENGINE_TEST_PUBLISHED=1 npm run test:browser  # Verify the pinned v0.4.0 dependency too
+PUBENGINE_TEST_PUBLISHED=1 npm run test:browser  # Verify the scaffold's published dependency
 make bench
 ```
 
