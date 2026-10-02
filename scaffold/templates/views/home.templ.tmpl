@@ -11,7 +11,7 @@ templ Home(posts []pubengine.BlogPost, activeTag string, tags []string, siteURL 
 		@HeadWithMeta(pubengine.PageMeta{Title: siteConfig(ctx).Name, Description: siteConfig(ctx).Description, URL: siteURL, OGType: "website"}, siteConfig(ctx).Name)
 		<body class="min-h-screen bg-white text-gray-900">
 			@Nav(siteConfig(ctx).Name)
-			<main id="content" receiver="content" class="max-w-3xl mx-auto px-4 py-8">
+			<main id="content" receiver="content" tabindex="-1" class="max-w-3xl mx-auto px-5 py-10 sm:px-6 sm:py-14">
 				@BlogSection(posts, activeTag, tags)
 			</main>
 			@Footer(siteConfig(ctx).Name)
@@ -28,16 +28,26 @@ templ HomePartial(posts []pubengine.BlogPost, activeTag string, tags []string, s
 // BlogSection renders the blog post listing with tag filter.
 templ BlogSection(posts []pubengine.BlogPost, activeTag string, tags []string) {
 	<div id="blog-section" receiver="blogSection">
+        if len(posts) > 0 || activeTag != "" {
+            <header class="mb-10">
+                <p class="text-xs font-semibold uppercase tracking-widest text-blue-700">The journal</p>
+                <h1 class="mt-3 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">Stories &amp; ideas</h1>
+                if siteConfig(ctx).Description != "" {
+                    <p class="mt-4 max-w-xl text-lg leading-relaxed text-gray-600">{ siteConfig(ctx).Description }</p>
+                }
+            </header>
+        }
 		if len(tags) > 0 {
-			<div class="flex flex-wrap gap-2 mb-8">
+			<nav aria-label="Filter posts by tag" class="flex flex-wrap gap-2 mb-8">
 				<a
 					href="/"
 					sender="blogSection get: /?partial=blog apply: outer"
 					push-url="/"
 					if activeTag == "" {
-						class="px-3 py-1 text-sm rounded-full bg-gray-900 text-white"
+                        aria-current="page"
+						class="px-4 py-2 text-sm rounded-full bg-gray-900 text-white"
 					} else {
-						class="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
+						class="px-4 py-2 text-sm rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
 					}
 				>
 					All
@@ -48,40 +58,41 @@ templ BlogSection(posts []pubengine.BlogPost, activeTag string, tags []string) {
 						sender={ "blogSection get: /?tag=" + pubengine.QueryEscape(tag) + "&partial=blog apply: outer" }
 						push-url={ "/?tag=" + pubengine.QueryEscape(tag) }
 						if tag == activeTag {
-							class="px-3 py-1 text-sm rounded-full bg-gray-900 text-white"
+                            aria-current="page"
+							class="px-4 py-2 text-sm rounded-full bg-gray-900 text-white"
 						} else {
-							class="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
+							class="px-4 py-2 text-sm rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
 						}
 					>
 						{ tag }
 					</a>
 				}
-			</div>
+			</nav>
 		}
 		if len(posts) == 0 && activeTag == "" {
 			@Welcome()
 		} else if len(posts) == 0 {
-			<p class="text-gray-500">No posts found.</p>
+			<p role="status" class="rounded-xl bg-gray-50 p-6 text-gray-600">No posts found for this tag. <a href="/" class="underline">Browse all posts</a>.</p>
 		}
-		<div class="space-y-8">
+		<div class="divide-y divide-gray-200">
 			for _, post := range posts {
-				<article class="group">
+				<article class="group py-8 first:pt-0">
 					<a
 						href={ templ.SafeURL(pubengine.PostPath(post.Slug)) }
 						sender={ "content get: " + pubengine.PostPath(post.Slug) + "?partial=post apply: outer" }
 						push-url={ pubengine.PostPath(post.Slug) }
 						class="block"
 					>
-						<h2 class="text-xl font-semibold group-hover:text-blue-600">
+						<h2 class="text-2xl font-semibold tracking-tight break-words group-hover:text-blue-700">
 							{ post.Title }
 						</h2>
-						<time class="text-sm text-gray-500">{ post.Date }</time>
+						<time datetime={ post.Date } class="text-sm text-gray-500">{ post.Date }</time>
 						if post.Summary != "" {
-							<p class="mt-2 text-gray-600">{ post.Summary }</p>
+							<p class="mt-3 text-base leading-relaxed text-gray-600">{ post.Summary }</p>
 						}
 					</a>
 					if len(post.Tags) > 0 {
-						<div class="mt-2 flex gap-2">
+						<div class="mt-3 flex flex-wrap gap-2">
 							for _, tag := range post.Tags {
 								<span class="text-xs px-2 py-0.5 bg-gray-100 rounded text-gray-600">{ tag }</span>
 							}

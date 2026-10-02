@@ -12,3 +12,33 @@ window.pubenginePanel = async function (url, options) {
     message.textContent = error.message;
   }
 };
+
+// Announce navigation without hiding the current page while a request is pending.
+function navigationStatus(message, failed = false) {
+  const status = document.getElementById("navigation-status");
+  if (!status) return;
+  status.hidden = !message;
+  status.textContent = message;
+  status.setAttribute("role", failed ? "alert" : "status");
+}
+document.addEventListener("click", event => {
+  const sender = event.target.closest("[sender][push-url]");
+  if (!sender || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || sender.hasAttribute("download") || (sender.target && sender.target !== "_self")) return;
+  navigationStatus("Loading…");
+}, true);
+function navigationComplete(event) {
+  navigationStatus("");
+  document.getElementById("content")?.focus({ preventScroll: true });
+  if (!event.detail.traversal) window.scrollTo({ top: 0, behavior: "instant" });
+}
+document.addEventListener("talkdom:navigate", navigationComplete);
+// Published PubEngine v0.4.0 signals completed navigation through talkdom:done.
+document.addEventListener("talkdom:done", event => {
+  if (!window.talkDOM?.pubengineNavigationEvents && ["content", "blogSection"].includes(event.detail?.receiver)) navigationComplete(event);
+});
+document.addEventListener("talkdom:error", event => {
+  if (event.detail?.error?.name === "AbortError") return;
+  if (["content", "blogSection"].includes(event.detail?.receiver)) {
+    navigationStatus("This page could not be loaded. Please try again.", true);
+  }
+});

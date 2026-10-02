@@ -8,7 +8,7 @@ TAILWIND_INPUT := assets/tailwind.css
 TAILWIND_OUTPUT := public/tailwind.css
 JS_INPUT := src/app.js
 JS_OUTPUT := public/app.min.js
-TEMPL := go run github.com/a-h/templ/cmd/templ@v0.3.960
+TEMPL := go run github.com/a-h/templ/cmd/templ@v0.3.1020
 VIEW_SOURCES := $(wildcard views/*.templ views/*.go)
 
 .PHONY: css css-prod js templ run prod test build-linux
@@ -23,7 +23,7 @@ css-prod: $(TAILWIND_INPUT) $(VIEW_SOURCES) tailwind.config.js package-lock.json
 
 js: $(JS_OUTPUT)
 
-$(JS_OUTPUT): $(JS_INPUT) | $(ESBUILD)
+$(JS_OUTPUT): $(JS_INPUT) package-lock.json | $(ESBUILD)
 	$(ESBUILD) $(JS_INPUT) --bundle --minify --outfile=$(JS_OUTPUT)
 
 package-lock.json: package.json

@@ -37,6 +37,14 @@ async function freePort() {
     assert(ready, 'server did not start');
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+    await context.addInitScript(() => {
+      window.__analyticsEvents = [];
+      const sendBeacon = navigator.sendBeacon.bind(navigator);
+      navigator.sendBeacon = (url, data) => {
+        if (String(url).includes('/api/analytics/collect')) data.text().then(body => window.__analyticsEvents.push(JSON.parse(body)));
+        return sendBeacon(url, data);
+      };
+    });
     page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(origin);
@@ -54,16 +62,24 @@ async function freePort() {
     assert(await page.getByRole('alert').isVisible());
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.waitForURL('**/admin/');
+    // Browser requests use Fetch Metadata in Echo 4.16; explicitly exercise the
+    // cookie/token fallback for the non-browser API requests used to seed data.
+    await page.request.get(origin + '/admin/');
     const csrf = (await context.cookies()).find(c => c.name === '_csrf').value;
     for (let i = 0; i < 23; i++) {
       const slug = 'post-' + String(i).padStart(3, '0');
       const response = await page.request.post(origin + '/admin/save/', { form: {
-        _csrf: csrf, slug, title: slug, date: '2026-01-01', tags: 'go', summary: 'Summary ' + slug, content: '**Body** ' + slug, published: '1',
+        _csrf: csrf, slug, title: slug, date: '2026-01-01', tags: 'go', summary: 'Summary ' + slug, content: '**Body** ' + slug + '\n\n## A clearer reading experience\n\nArticles need comfortable spacing and readable text on every screen.\n\n- Read on desktop\n- Keep reading on mobile\n\n```go\n' + 'long code sample '.repeat(25) + '\n```', published: '1',
       } });
       assert.equal(response.status(), 200);
     }
     await page.goto(origin);
     assert.equal(await page.locator('main article').count(), 20);
+    assert.equal(await page.locator('main h1').textContent(), 'Stories & ideas');
+    if (process.env.PUBENGINE_SCREENSHOT_DIR) {
+      fs.mkdirSync(process.env.PUBENGINE_SCREENSHOT_DIR, { recursive: true });
+      await page.screenshot({ path: path.join(process.env.PUBENGINE_SCREENSHOT_DIR, 'home-desktop.png'), fullPage: true });
+    }
     await page.getByRole('link', { name: 'Next', exact: true }).click();
     assert.equal(await page.locator('main article').count(), 3);
     await page.goto(origin);
@@ -73,6 +89,14 @@ async function freePort() {
     assert.equal(await page.locator('link[rel=canonical]').getAttribute('href'), origin + '/blog/post-000/');
     assert((await page.locator('script[type="application/ld+json"]').textContent()).includes('Runtime Author'));
     assert.equal(await page.locator('aside a').count(), 6);
+    await page.waitForFunction(() => window.__analyticsEvents.some(e => e.event === 'view' && e.path === '/blog/post-000/'));
+    assert.equal(await page.evaluate(() => window.__analyticsEvents.filter(e => e.event === 'view' && e.path === '/blog/post-000/').length), 1);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'content');
+    assert(await page.locator('.prose').evaluate(el => parseFloat(getComputedStyle(el.querySelector('h2')).fontSize) > parseFloat(getComputedStyle(el.querySelector('p')).fontSize)), 'article headings need typography styles');
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'article overflows mobile viewport');
+    if (process.env.PUBENGINE_SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.PUBENGINE_SCREENSHOT_DIR, 'article-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.goBack();
     await page.locator('main article').first().waitFor();
     assert.equal(new URL(page.url()).pathname, '/');
@@ -83,6 +107,7 @@ async function freePort() {
     await failure;
     assert.equal(new URL(page.url()).pathname, '/');
     assert.equal(await page.locator('main article').count(), 20);
+    await page.getByRole('alert').filter({ hasText: 'could not be loaded' }).waitFor();
     await page.unroute('**/blog/post-001/**');
     let release, started;
     const hold = new Promise(resolve => { release = resolve; });
@@ -94,6 +119,10 @@ async function freePort() {
     assert.equal(await page.locator('main h1').textContent(), 'post-002');
     await page.goto(origin + '/admin/');
     await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'editor overflows mobile viewport');
+    if (process.env.PUBENGINE_SCREENSHOT_DIR) await page.screenshot({ path: path.join(process.env.PUBENGINE_SCREENSHOT_DIR, 'editor-mobile.png'), fullPage: true });
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.locator('[name=content]').fill('Unsaved draft');
     const slug = await page.locator('[name=slug]').inputValue();
     const revision = await page.locator('[name=revision]').inputValue();

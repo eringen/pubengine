@@ -17,7 +17,7 @@ templ Post(post pubengine.BlogPost, posts []pubengine.BlogPost, siteURL string) 
 		}, siteConfig(ctx).Name)
 		<body class="min-h-screen bg-white text-gray-900">
 			@Nav(siteConfig(ctx).Name)
-			<main id="content" receiver="content" class="max-w-3xl mx-auto px-4 py-8">
+			<main id="content" receiver="content" tabindex="-1" class="max-w-3xl mx-auto px-5 py-10 sm:px-6 sm:py-14">
 				@postContent(post, posts)
 			</main>
 			@Footer(siteConfig(ctx).Name)
@@ -32,12 +32,13 @@ templ PostPartial(post pubengine.BlogPost, posts []pubengine.BlogPost, siteURL s
 }
 
 templ postContent(post pubengine.BlogPost, posts []pubengine.BlogPost) {
-	<article>
+	<a href="/" sender="content get: / apply: outer" push-url="/" class="mb-8 inline-flex py-2 text-sm font-medium text-gray-600 hover:text-blue-700">← All posts</a>
+    <article>
 		<header class="mb-8">
-			<h1 class="text-3xl font-bold mb-2">{ post.Title }</h1>
-			<time class="text-sm text-gray-500">{ post.Date }</time>
+			<h1 class="text-4xl font-bold tracking-tight leading-tight break-words mb-4 sm:text-5xl">{ post.Title }</h1>
+			<time datetime={ post.Date } class="text-sm text-gray-500">{ post.Date }</time>
 			if len(post.Tags) > 0 {
-				<div class="mt-2 flex gap-2">
+				<div class="mt-3 flex flex-wrap gap-2">
 					for _, tag := range post.Tags {
 						<a
 							href={ templ.SafeURL("/?tag=" + pubengine.QueryEscape(tag)) }
@@ -49,7 +50,7 @@ templ postContent(post pubengine.BlogPost, posts []pubengine.BlogPost) {
 				</div>
 			}
 		</header>
-		<div class="prose max-w-none">
+		<div class="prose prose-lg prose-gray max-w-none">
 			@markdown.Markdown(post.Content)
 		</div>
 	</article>
@@ -66,7 +67,7 @@ templ postContent(post pubengine.BlogPost, posts []pubengine.BlogPost) {
 						class="block hover:text-blue-600"
 					>
 						<h3 class="font-medium">{ rp.Title }</h3>
-						<time class="text-sm text-gray-500">{ rp.Date }</time>
+						<time datetime={ rp.Date } class="text-sm text-gray-500">{ rp.Date }</time>
 					</a>
 				}
 			</div>

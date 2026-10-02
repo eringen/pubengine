@@ -28,6 +28,7 @@ templ AdminLogin(errorMsg string, csrfToken string, googleLoginURL string) {
 							name="password"
 							id="password"
 							required
+							autocomplete="current-password"
 							autofocus
 							class="w-full px-3 py-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
 						/>
@@ -76,7 +77,7 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 		<body class="min-h-screen bg-white text-gray-900">
 			<meta name="csrf-token" content={ csrfToken }/>
 			<nav class="border-b border-gray-200 bg-white">
-				<div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+				<div class="max-w-4xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
 					<a href="/admin/" class="text-lg font-bold">{ siteConfig(ctx).Name } Admin</a>
 					<div class="flex items-center gap-4">
 						if siteConfig(ctx).AnalyticsEnabled {
@@ -122,12 +123,12 @@ templ AdminDashboard(posts []pubengine.BlogPost, message string, csrfToken strin
 				<div id="post-form" receiver="postForm" class="mb-8"></div>
 				<div class="space-y-2">
 					for _, post := range posts {
-						<div class="flex items-center justify-between p-3 border border-gray-200 rounded">
-							<div class="flex items-center gap-3">
+						<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border border-gray-200 rounded-lg">
+							<div class="flex flex-wrap items-center gap-3 min-w-0">
 								if !post.Published {
 									<span class="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">Draft</span>
 								}
-								<span class="font-medium">{ post.Title }</span>
+								<span class="font-medium break-words">{ post.Title }</span>
 								<span class="text-sm text-gray-500">{ post.Date }</span>
 							</div>
 							<div class="flex items-center gap-2">
@@ -165,7 +166,7 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
         if post.Error != "" {
             <p role="alert" class="text-red-700">{ post.Error }</p>
         }
-		<div class="grid grid-cols-2 gap-4">
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			<div>
 				<label for="title" class="block text-sm font-medium mb-1">Title</label>
 				<input
@@ -187,7 +188,7 @@ templ AdminFormPartial(post pubengine.BlogPost, csrfToken string) {
 				/>
 			</div>
 		</div>
-		<div class="grid grid-cols-2 gap-4">
+		<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 			<div>
 				<label for="date" class="block text-sm font-medium mb-1">Date</label>
 				<input
@@ -290,10 +291,10 @@ templ AdminImages(images []pubengine.Image, csrfToken string) {
 			method="POST"
 			enctype="multipart/form-data"
 			onsubmit="event.preventDefault();window.pubenginePanel(this.action,{method:'POST',body:new FormData(this)})"
-			class="flex items-end gap-3"
+			class="flex flex-col sm:flex-row sm:items-end gap-3"
 		>
 			<input type="hidden" name="_csrf" value={ csrfToken }/>
-			<div class="flex-1">
+			<div class="min-w-0 w-full flex-1">
 				<label for="image" class="block text-sm font-medium mb-1">Upload Image</label>
 				<input
 					type="file"

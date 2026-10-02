@@ -16,7 +16,7 @@ import (
 
 // Exercise actual generated code, including templates that ordinary go test never compiles.
 func TestGeneratedSite(t *testing.T) {
-	generator := "github.com/a-h/templ/cmd/templ@v0.3.960"
+	generator := "github.com/a-h/templ/cmd/templ@v0.3.1020"
 	dir := t.TempDir()
 	root, err := filepath.Abs("../..")
 	if err != nil {
@@ -50,7 +50,10 @@ func TestGeneratedSite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mod := "module example.com/audit\n\ngo 1.24.0\n\nrequire github.com/eringen/pubengine v0.0.0\nreplace github.com/eringen/pubengine => " + root + "\n"
+	mod := "module example.com/audit\n\ngo 1.26.0\n\nrequire github.com/eringen/pubengine v0.0.0\nreplace github.com/eringen/pubengine => " + root + "\n"
+	if os.Getenv("PUBENGINE_TEST_PUBLISHED") == "1" {
+		mod = "module example.com/audit\n\ngo 1.26.0\n\nrequire (\n github.com/eringen/pubengine v0.4.0\n github.com/a-h/templ v0.3.1020\n)\n"
+	}
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(mod), 0o644); err != nil {
 		t.Fatal(err)
 	}

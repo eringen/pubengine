@@ -51,9 +51,10 @@ templ HeadWithMeta(meta pubengine.PageMeta, siteName string) {
 
 // Nav renders the site navigation bar.
 templ Nav(siteName string) {
-	<nav class="border-b border-gray-200 bg-white">
-		<div class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
-			<a href="/" class="text-lg font-bold text-gray-900 hover:text-gray-600">
+	<a href="#content" class="skip-link">Skip to content</a>
+	<nav aria-label="Main navigation" class="border-b border-gray-200 bg-white">
+		<div class="max-w-3xl mx-auto px-5 py-5 flex flex-wrap items-center justify-between gap-4">
+			<a href="/" class="text-lg font-bold tracking-tight text-gray-900 hover:text-blue-700 break-words">
 				{ siteName }
 			</a>
 			<div class="flex items-center gap-4">
@@ -62,6 +63,7 @@ templ Nav(siteName string) {
 			</div>
 		</div>
 	</nav>
+    <p id="navigation-status" role="status" aria-live="polite" hidden class="max-w-3xl mx-auto px-5 pt-4 text-sm text-gray-600"></p>
 }
 
 // Footer renders the site footer.
