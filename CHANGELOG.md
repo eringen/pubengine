@@ -1,7 +1,11 @@
 # Changelog
 
-## 2026-10-02
+## v0.4.0 — 2026-10-02
 
+- Report the installed module version in the CLI, while preserving build-time overrides.
+- Reject placeholder admin credentials, generate independent scaffold secrets, and enforce login throttling.
+- Protect edits with revision checks, retain redirects after renames, and validate request and image limits.
+- Use installation-scoped analytics identifiers and explicit page-view events; shut down requests and workers cleanly.
 - Accept standard Markdown images, copy real dimensions, and lazy-load later article images.
 - Apply only the latest navigation response, commit history after success, restore Back navigation, and synchronize page metadata.
 - Bind generated views to runtime site settings and honor analytics environment variables.

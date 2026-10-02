@@ -3,10 +3,21 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 )
 
-// version is set at build time via ldflags.
+// version can be overridden via ldflags.
 var version = "dev"
+
+func currentVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return version
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -25,7 +36,7 @@ func main() {
 			os.Exit(1)
 		}
 	case "version":
-		fmt.Printf("pubengine %s\n", version)
+		fmt.Printf("pubengine %s\n", currentVersion())
 	case "help", "-h", "--help":
 		printUsage()
 	default:
